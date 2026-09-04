@@ -190,19 +190,23 @@ describe('Supervisor Operations Phase 1 Database', () => {
       [dutyMemberId, orgA, shiftId, assignmentId, grantId]
     );
 
-    // Test Score > 10
+    // Test Score > 10 in an isolated savepoint so the outer transaction remains usable.
+    await client.query('SAVEPOINT invalid_score_high');
     await expect(client.query(
       `INSERT INTO clinical_evaluation_events (organization_id, snapshot_id, evaluator_account_id, duty_member_id, permission_set_version_id, score) 
        VALUES ($1, $2, $3, $4, $5, 11)`,
       [orgA, snapshotId, accountId, dutyMemberId, versionId]
     )).rejects.toThrow();
+    await client.query('ROLLBACK TO SAVEPOINT invalid_score_high');
 
-    // Test Score < 0
+    // Test Score < 0 in an isolated savepoint for the same reason.
+    await client.query('SAVEPOINT invalid_score_low');
     await expect(client.query(
       `INSERT INTO clinical_evaluation_events (organization_id, snapshot_id, evaluator_account_id, duty_member_id, permission_set_version_id, score) 
        VALUES ($1, $2, $3, $4, $5, -1)`,
       [orgA, snapshotId, accountId, dutyMemberId, versionId]
     )).rejects.toThrow();
+    await client.query('ROLLBACK TO SAVEPOINT invalid_score_low');
 
     // Insert valid score
     const eventId = crypto.randomUUID();
