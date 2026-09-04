@@ -114,3 +114,64 @@ export interface SubmitCaseInput { idempotencyKey: string; draftId: string; }
 export interface GradeCaseInput { grade: number; comment: string; idempotencyKey: string; }
 export interface AmendGradeInput extends GradeCaseInput { reason: string; }
 export interface ReopenTermResultInput { reason: string; idempotencyKey: string; }
+
+export type SupervisorAction = 'START_APPROVAL' | 'COMPLETION_APPROVAL' | 'CASESHEET_EVALUATION' | 'CLINICAL_FEEDBACK';
+
+export interface SupervisorSummaryDto {
+  id: string;
+  active: boolean;
+  display_name: string;
+  email: string;
+}
+export interface SupervisorListDto { items: SupervisorSummaryDto[]; }
+
+export interface SupervisorGrantDto {
+  id: string;
+  permission_set_version_id: string;
+  granted_at: string;
+  revoked_at: string | null;
+  assignment_id: string;
+  department_id: string | null;
+}
+export interface SupervisorGrantListDto { items: SupervisorGrantDto[]; }
+
+export interface IdResponseDto { id: string; }
+export interface DutyScheduleDto {
+  id: string;
+  department_id: string;
+  academic_year_id: string;
+  timezone: string;
+  valid_from: string;
+  valid_to: string;
+}
+export interface DutyScheduleListDto { items: DutyScheduleDto[]; }
+export interface DutyShiftMemberDto {
+  member_id: string;
+  assignment_id: string;
+  supervisor_name: string | null;
+}
+export interface DutyShiftDto {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  status: LifecycleStatus;
+  members: DutyShiftMemberDto[] | null;
+}
+export interface DutyScheduleDetailDto extends DutyScheduleDto { shifts: DutyShiftDto[]; }
+
+export interface SupervisorDutyDto {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  assignment_id: string;
+}
+export interface SupervisorDutyCaseDto {
+  snapshot_id: string;
+  current_status: SubmissionStatus;
+}
+export interface SupervisorCaseDetailDto {
+  snapshot_id: string;
+  current_status: SubmissionStatus;
+  payload: Record<string, unknown>;
+  allowedActions: SupervisorAction[];
+}

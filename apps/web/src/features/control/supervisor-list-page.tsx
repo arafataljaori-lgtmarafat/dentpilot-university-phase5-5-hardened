@@ -67,7 +67,7 @@ export function SupervisorListControlPage() {
             </tr>
           </thead>
           <tbody>
-            {supervisors.map((sv: any) => (
+            {supervisors.map((sv) => (
               <tr key={sv.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>{sv.display_name}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{sv.email}</td>

@@ -15,6 +15,7 @@ export function SupervisorDetailControlPage({ id }: { id: string }) {
   if (grantsRes.error) return <ErrorState error={grantsRes.error} onRetry={grantsRes.reload} />;
 
   const sv = supervisorRes.data;
+  if (!sv) return <div>لا توجد بيانات للمشرف</div>;
   const grants = grantsRes.data?.items || [];
 
   const handleToggleStatus = async () => {
@@ -97,7 +98,7 @@ export function SupervisorDetailControlPage({ id }: { id: string }) {
               </tr>
             </thead>
             <tbody>
-              {grants.map((grant: any) => (
+              {grants.map((grant) => (
                 <tr key={grant.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                   <td style={{ padding: '12px 16px', fontFamily: 'monospace' }}>{grant.permission_set_version_id}</td>
                   <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>

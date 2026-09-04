@@ -50,8 +50,8 @@ export function SupervisorQueuePage() {
                 <tr key={c.snapshot_id}>
                   <td>{c.snapshot_id.split('-')[0]}</td>
                   <td><span className="status-badge" data-status={c.current_status}>{c.current_status}</span></td>
-                  <td>{c.student_name || 'طالب'}</td>
-                  <td>{c.updated_at ? new Date(c.updated_at).toLocaleTimeString('ar') : '—'}</td>
+                  <td>الحالة ضمن المناوبة</td>
+                  <td>—</td>
                   <td><button className="button ghost" onClick={() => navigate(`/supervisor/cases/${c.snapshot_id}`)}>تفاصيل / إجراء</button></td>
                 </tr>
               ))}

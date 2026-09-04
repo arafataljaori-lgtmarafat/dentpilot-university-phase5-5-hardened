@@ -7,6 +7,19 @@ import { AuditService } from '../audit/service.js';
 import { IdempotencyService } from '../../infrastructure/idempotency.js';
 import { SupervisorAuthorizationEngine } from './authorization.js';
 import { ClinicalEvaluationPolicy, type SupervisorAction } from '@dentpilot/domain';
+import type {
+  DutyScheduleDetailDto,
+  DutyScheduleDto,
+  DutyScheduleListDto,
+  DutyShiftDto,
+  SupervisorCaseDetailDto,
+  SupervisorDutyCaseDto,
+  SupervisorDutyDto,
+  SupervisorGrantDto,
+  SupervisorGrantListDto,
+  SupervisorListDto,
+  SupervisorSummaryDto,
+} from '@dentpilot/contracts';
 import { CasesService } from '../cases/service.js';
 
 export class SupervisorService {
@@ -24,7 +37,7 @@ export class SupervisorService {
   // UNIVERSITY CONTROL APIS
   // ==========================================
 
-  async listSupervisors(client: PoolClient, principal: Principal): Promise<unknown> {
+  async listSupervisors(client: PoolClient, principal: Principal): Promise<SupervisorListDto> {
     if (principal.role !== 'UNIVERSITY_ADMIN' && principal.role !== 'DEPARTMENT_ADMIN') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
     const query = principal.role === 'UNIVERSITY_ADMIN' 
       ? `SELECT fp.account_id as id, fp.active, fp.display_name, a.email
@@ -42,11 +55,11 @@ export class SupervisorService {
            AND (s.academic_level_id IS NULL OR sa.academic_level_id = s.academic_level_id)
            AND (s.cohort_id IS NULL OR sa.cohort_id = s.cohort_id)`;
     const params = principal.role === 'UNIVERSITY_ADMIN' ? [principal.organizationId] : [principal.organizationId, principal.accountId];
-    const result = await client.query(query, params);
+    const result = await client.query<SupervisorSummaryDto>(query, params);
     return { items: result.rows };
   }
 
-  async getSupervisorDetail(client: PoolClient, principal: Principal, accountId: string): Promise<unknown> {
+  async getSupervisorDetail(client: PoolClient, principal: Principal, accountId: string): Promise<SupervisorSummaryDto> {
     if (principal.role !== 'UNIVERSITY_ADMIN' && principal.role !== 'DEPARTMENT_ADMIN') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
     const query = principal.role === 'UNIVERSITY_ADMIN'
       ? `SELECT fp.account_id as id, fp.active, fp.display_name, a.email
@@ -64,24 +77,24 @@ export class SupervisorService {
            AND (s.academic_level_id IS NULL OR sa.academic_level_id = s.academic_level_id)
            AND (s.cohort_id IS NULL OR sa.cohort_id = s.cohort_id)`;
     const params = principal.role === 'UNIVERSITY_ADMIN' ? [principal.organizationId, accountId] : [principal.organizationId, accountId, principal.accountId];
-    const result = await client.query(query, params);
+    const result = await client.query<SupervisorSummaryDto>(query, params);
     if (!result.rowCount) throw new ApiProblem(404, 'NOT_FOUND', 'Supervisor not found.');
     return result.rows[0];
   }
 
-  async getSupervisorGrants(client: PoolClient, principal: Principal, accountId: string): Promise<unknown> {
+  async getSupervisorGrants(client: PoolClient, principal: Principal, accountId: string): Promise<SupervisorGrantListDto> {
     if (principal.role !== 'UNIVERSITY_ADMIN' && principal.role !== 'DEPARTMENT_ADMIN') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
     
     // First verify they have access to this supervisor
     await this.getSupervisorDetail(client, principal, accountId);
 
-    const result = await client.query(
-      `SELECT spg.id, spg.permission_set_version_id, spg.granted_at, spg.revoked_at,
+    const result = await client.query<SupervisorGrantDto>(
+      `SELECT spg.id, spg.permission_set_version_id, spg.effective_from AS granted_at, spg.effective_to AS revoked_at,
               sa.id as assignment_id, sa.department_id
        FROM supervisor_permission_grants spg
        JOIN supervisor_assignments sa ON sa.id = spg.assignment_id
        WHERE sa.organization_id = $1 AND sa.supervisor_account_id = $2
-       ORDER BY spg.granted_at DESC`,
+       ORDER BY spg.effective_from DESC`,
       [principal.organizationId, accountId]
     );
     return { items: result.rows };
@@ -275,9 +288,9 @@ export class SupervisorService {
     });
   }
 
-  async listSchedules(client: PoolClient, principal: Principal): Promise<unknown> {
+  async listSchedules(client: PoolClient, principal: Principal): Promise<DutyScheduleListDto> {
     await this.authorization.assert(client, principal, 'rosters:manage');
-    const result = await client.query(
+    const result = await client.query<DutyScheduleDto>(
       `SELECT id, department_id, academic_year_id, timezone, valid_from, valid_to 
        FROM clinical_duty_schedules 
        WHERE organization_id = $1 
@@ -287,10 +300,10 @@ export class SupervisorService {
     return { items: result.rows };
   }
 
-  async getScheduleDetail(client: PoolClient, principal: Principal, scheduleId: string): Promise<unknown> {
+  async getScheduleDetail(client: PoolClient, principal: Principal, scheduleId: string): Promise<DutyScheduleDetailDto> {
     await this.authorization.assert(client, principal, 'rosters:manage');
     
-    const schedResult = await client.query(
+    const schedResult = await client.query<DutyScheduleDto>(
       `SELECT id, department_id, academic_year_id, timezone, valid_from, valid_to 
        FROM clinical_duty_schedules 
        WHERE id = $1 AND organization_id = $2`,
@@ -298,7 +311,7 @@ export class SupervisorService {
     );
     if (!schedResult.rowCount) throw new ApiProblem(404, 'NOT_FOUND', 'Schedule not found.');
     
-    const shiftsResult = await client.query(
+    const shiftsResult = await client.query<DutyShiftDto>(
       `SELECT s.id, s.starts_at, s.ends_at, s.status,
               json_agg(json_build_object(
                 'member_id', m.id, 
@@ -325,9 +338,9 @@ export class SupervisorService {
   // SUPERVISOR APIS
   // ==========================================
 
-  async getActiveDuty(client: PoolClient, principal: Principal): Promise<unknown> {
+  async getActiveDuty(client: PoolClient, principal: Principal): Promise<SupervisorDutyDto[]> {
     if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
-    const result = await client.query(
+    const result = await client.query<SupervisorDutyDto>(
       `SELECT cds.id, cds.starts_at, cds.ends_at, cdm.assignment_id 
        FROM clinical_duty_members cdm
        JOIN clinical_duty_shifts cds ON cds.id = cdm.shift_id
@@ -340,9 +353,9 @@ export class SupervisorService {
     return result.rows;
   }
 
-  async getUpcomingDuties(client: PoolClient, principal: Principal): Promise<unknown> {
+  async getUpcomingDuties(client: PoolClient, principal: Principal): Promise<SupervisorDutyDto[]> {
     if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
-    const result = await client.query(
+    const result = await client.query<SupervisorDutyDto>(
       `SELECT cds.id, cds.starts_at, cds.ends_at, cdm.assignment_id 
        FROM clinical_duty_members cdm
        JOIN clinical_duty_shifts cds ON cds.id = cdm.shift_id
@@ -355,10 +368,10 @@ export class SupervisorService {
     return result.rows;
   }
 
-  async listDutyCases(client: PoolClient, principal: Principal): Promise<unknown> {
+  async listDutyCases(client: PoolClient, principal: Principal): Promise<SupervisorDutyCaseDto[]> {
     if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
     // Lists cases in scope of current active duty
-    const result = await client.query(
+    const result = await client.query<SupervisorDutyCaseDto>(
       `SELECT ss.id as snapshot_id, cs.current_status
        FROM submission_snapshots ss
        JOIN case_sheets cs ON cs.id = ss.case_sheet_id AND cs.latest_snapshot_id = ss.id
@@ -378,10 +391,10 @@ export class SupervisorService {
     return result.rows;
   }
 
-  async getCaseDetail(client: PoolClient, principal: Principal, snapshotId: string): Promise<unknown> {
+  async getCaseDetail(client: PoolClient, principal: Principal, snapshotId: string): Promise<SupervisorCaseDetailDto> {
     if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
     // Check if the supervisor has access to this case under an active duty
-    const result = await client.query(
+    const result = await client.query<Omit<SupervisorCaseDetailDto, 'allowedActions'>>(
       `SELECT ss.id as snapshot_id, cs.current_status, ss.payload
        FROM submission_snapshots ss
        JOIN case_sheets cs ON cs.id = ss.case_sheet_id AND cs.latest_snapshot_id = ss.id

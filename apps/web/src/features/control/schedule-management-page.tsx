@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, newIdempotencyKey } from '../../api/client';
+import type { DutyShiftDto } from '@dentpilot/contracts';
 import { useResource } from '../../api/use-resource';
 import { ErrorState, LoadingState, PageHeader } from '../../components/ui';
 import { navigate } from '../../routing/hash-router';
@@ -39,7 +40,7 @@ export function SchedulesControlPage() {
             </tr>
           </thead>
           <tbody>
-            {schedules.map((sch: any) => (
+            {schedules.map((sch) => (
               <tr key={sch.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 'bold', fontFamily: 'monospace' }}>
                   {sch.id.split('-')[0]}
@@ -85,10 +86,11 @@ export function ScheduleDetailControlPage({ id }: { id: string }) {
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   const schedule = data;
-  const shifts = schedule?.shifts || [];
+  if (!schedule) return <div>لا توجد بيانات للجدول</div>;
+  const shifts = schedule.shifts;
 
   // Group shifts by day
-  const groupedShifts = shifts.reduce((acc: any, shift: any) => {
+  const groupedShifts = shifts.reduce<Record<string, DutyShiftDto[]>>((acc, shift) => {
     const day = new Date(shift.starts_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     if (!acc[day]) acc[day] = [];
     acc[day].push(shift);
@@ -118,13 +120,13 @@ export function ScheduleDetailControlPage({ id }: { id: string }) {
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>لا توجد مناوبات في هذا الجدول</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            {Object.entries(groupedShifts).map(([day, dayShifts]: [string, any]) => (
+            {Object.entries(groupedShifts).map(([day, dayShifts]) => (
               <div key={day} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ background: 'var(--bg-color)', padding: '12px 16px', fontWeight: 'bold', borderBottom: '1px solid var(--border-color)' }}>
                   {day}
                 </div>
                 <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {dayShifts.map((shift: any) => (
+                  {dayShifts.map((shift) => (
                     <div key={shift.id} style={{ display: 'flex', gap: '24px', paddingBottom: '16px', borderBottom: '1px dashed var(--border-color)' }}>
                       <div style={{ minWidth: '150px' }}>
                         <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
@@ -137,7 +139,7 @@ export function ScheduleDetailControlPage({ id }: { id: string }) {
                       <div style={{ flex: 1 }}>
                         <div style={{ marginBottom: '8px', fontWeight: 'bold', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>المشرفون المعينون:</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {shift.members?.map((m: any) => (
+                          {shift.members?.map((m) => (
                             <div key={m.member_id} style={{ background: 'var(--neutral-bg, #f1f3f4)', padding: '4px 12px', borderRadius: '16px', fontSize: '0.875rem' }}>
                               👤 {m.supervisor_name}
                             </div>

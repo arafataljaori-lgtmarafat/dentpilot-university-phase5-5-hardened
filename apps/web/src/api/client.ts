@@ -1,11 +1,16 @@
 import type {
+  AccountRole,
   AcademicLevelDto,
   AcademicYearDto,
   ApiError,
   CohortDto,
   DashboardReportDto,
   DepartmentDto,
+  DutyScheduleDetailDto,
+  DutyScheduleListDto,
   GroupDto,
+  IdResponseDto,
+  InvitationCreatedDto,
   PresignReadDto,
   ScopedReportDto,
   SessionActorDto,
@@ -14,6 +19,12 @@ import type {
   SubmissionDetailDto,
   SubmissionListDto,
   SupervisorAssignmentListDto,
+  SupervisorCaseDetailDto,
+  SupervisorDutyCaseDto,
+  SupervisorDutyDto,
+  SupervisorGrantListDto,
+  SupervisorListDto,
+  SupervisorSummaryDto,
   SubmissionStatus,
 } from '@dentpilot/contracts';
 
@@ -167,16 +178,16 @@ export const api = {
     request<SupervisorAssignmentListDto>(`/api/v1/supervisor-assignments${queryString(filters)}`),
 
   // Control APIs
-  controlSupervisors: () => request<any>('/api/v1/control/supervisors'),
-  controlSupervisorDetail: (id: string) => request<any>(`/api/v1/control/supervisors/${encodeURIComponent(id)}`),
-  controlSupervisorGrants: (id: string) => request<any>(`/api/v1/control/supervisors/${encodeURIComponent(id)}/grants`),
+  controlSupervisors: () => request<SupervisorListDto>('/api/v1/control/supervisors'),
+  controlSupervisorDetail: (id: string) => request<SupervisorSummaryDto>(`/api/v1/control/supervisors/${encodeURIComponent(id)}`),
+  controlSupervisorGrants: (id: string) => request<SupervisorGrantListDto>(`/api/v1/control/supervisors/${encodeURIComponent(id)}/grants`),
   controlSetSupervisorStatus: (id: string, active: boolean, idempotencyKey: string) =>
     request<void>(`/api/v1/control/supervisors/${encodeURIComponent(id)}/status`, {
       method: 'POST',
       body: JSON.stringify({ active, idempotencyKey }),
     }),
   controlGrantPermission: (assignmentId: string, permissionSetVersionId: string, idempotencyKey: string) =>
-    request<any>(`/api/v1/control/assignments/${encodeURIComponent(assignmentId)}/grants`, {
+    request<IdResponseDto>(`/api/v1/control/assignments/${encodeURIComponent(assignmentId)}/grants`, {
       method: 'POST',
       body: JSON.stringify({ permissionSetVersionId, idempotencyKey }),
     }),
@@ -185,13 +196,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ idempotencyKey }),
     }),
-  controlIssueInvitation: (email: string, role: string, studentId?: string) =>
-    request<any>('/api/v1/invitations', {
+  controlIssueInvitation: (email: string, role: AccountRole, studentId?: string) =>
+    request<InvitationCreatedDto>('/api/v1/invitations', {
       method: 'POST',
       body: JSON.stringify({ email, role, studentId }),
     }),
   controlReissueInvitation: (id: string, idempotencyKey: string) =>
-    request<any>(`/api/v1/control/invitations/${encodeURIComponent(id)}/reissue`, {
+    request<InvitationCreatedDto>(`/api/v1/control/invitations/${encodeURIComponent(id)}/reissue`, {
       method: 'POST',
       body: JSON.stringify({ idempotencyKey }),
     }),
@@ -200,15 +211,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ idempotencyKey }),
     }),
-  controlSchedules: () => request<any>('/api/v1/control/schedules'),
-  controlScheduleDetail: (id: string) => request<any>(`/api/v1/control/schedules/${encodeURIComponent(id)}`),
+  controlSchedules: () => request<DutyScheduleListDto>('/api/v1/control/schedules'),
+  controlScheduleDetail: (id: string) => request<DutyScheduleDetailDto>(`/api/v1/control/schedules/${encodeURIComponent(id)}`),
   controlCreateSchedule: (input: { departmentId: string, academicYearId: string, timezone: string, validFrom: string, validTo: string, idempotencyKey: string }) =>
-    request<any>('/api/v1/control/schedules', {
+    request<IdResponseDto>('/api/v1/control/schedules', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
   controlCreateShift: (id: string, input: { startsAt: string, endsAt: string, idempotencyKey: string }) =>
-    request<any>(`/api/v1/control/schedules/${encodeURIComponent(id)}/shifts`, {
+    request<IdResponseDto>(`/api/v1/control/schedules/${encodeURIComponent(id)}/shifts`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
@@ -220,10 +231,10 @@ export const api = {
 
   // Supervisor APIs
 
-  supervisorActiveDuty: () => request<any[]>('/api/v1/supervisor/duties/current'),
-  supervisorUpcomingDuties: () => request<any[]>('/api/v1/supervisor/duties/upcoming'),
-  supervisorDutyCases: () => request<any[]>('/api/v1/supervisor/cases'),
-  supervisorCaseDetail: (id: string) => request<any>(`/api/v1/supervisor/cases/${encodeURIComponent(id)}`),
+  supervisorActiveDuty: () => request<SupervisorDutyDto[]>('/api/v1/supervisor/duties/current'),
+  supervisorUpcomingDuties: () => request<SupervisorDutyDto[]>('/api/v1/supervisor/duties/upcoming'),
+  supervisorDutyCases: () => request<SupervisorDutyCaseDto[]>('/api/v1/supervisor/cases'),
+  supervisorCaseDetail: (id: string) => request<SupervisorCaseDetailDto>(`/api/v1/supervisor/cases/${encodeURIComponent(id)}`),
 
   submissions: (filters: SubmissionListQuery) =>
     request<SubmissionListDto>(`/api/v1/staff/submissions${queryString(filters)}`),

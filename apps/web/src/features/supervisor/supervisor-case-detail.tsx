@@ -19,8 +19,8 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
       const idempotencyKey = crypto.randomUUID();
       await api.supervisorApproveStart(id, idempotencyKey);
       await caseRes.reload();
-    } catch (err: any) {
-      setActionError(err);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err : new Error('تعذر تنفيذ الإجراء.'));
     } finally {
       setLoadingAction(null);
     }
@@ -34,8 +34,8 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
       const idempotencyKey = crypto.randomUUID();
       await api.supervisorApproveCompletion(id, idempotencyKey);
       await caseRes.reload();
-    } catch (err: any) {
-      setActionError(err);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err : new Error('تعذر تنفيذ الإجراء.'));
     } finally {
       setLoadingAction(null);
     }
@@ -48,7 +48,7 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
   if (!c) return <div>لا توجد بيانات</div>;
 
   const currentStatus = c.current_status;
-  const allowedActions = c.allowedActions || [];
+  const allowedActions = c.allowedActions;
 
   // Determine action availability entirely from server-provided capabilities
   const canApproveStart = allowedActions.includes('START_APPROVAL');
@@ -73,25 +73,16 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
             <h2>البيانات الأساسية</h2>
           </div>
           <dl className="data-list">
-            <div><dt>معرف اللقطة (Snapshot ID)</dt><dd>{c.id}</dd></div>
-            <div><dt>الحالة السريرية الحالية</dt><dd><span className="status-badge" data-status={currentStatus}>{currentStatus}</span></dd></div>
-            <div><dt>الطالب</dt><dd>{c.student_name || 'غير متوفر'}</dd></div>
-            <div><dt>القسم</dt><dd>{c.department_name || 'غير متوفر'}</dd></div>
+              <div><dt>معرف اللقطة (Snapshot ID)</dt><dd>{c.snapshot_id}</dd></div>
+              <div><dt>الحالة السريرية الحالية</dt><dd><span className="status-badge" data-status={currentStatus}>{currentStatus}</span></dd></div>
           </dl>
         </section>
 
         <section className="surface">
           <div className="surface-heading">
-            <h2>ملاحظات سريرية سابقة</h2>
+            <h2>بيانات الحالة</h2>
           </div>
-          {/* If the API returns past feedback, map it here. Assuming c.feedback is an array for demonstration, or handled later. */}
-          {c.feedback && c.feedback.length > 0 ? (
-            <ul>
-              {c.feedback.map((f: any, i: number) => <li key={i}>{f.body}</li>)}
-            </ul>
-          ) : (
-            <p>لا توجد ملاحظات مسجلة.</p>
-          )}
+          <p>يعرض هذا العقد بيانات الحالة الأساسية والإجراءات المسموحة فقط.</p>
         </section>
       </div>
 

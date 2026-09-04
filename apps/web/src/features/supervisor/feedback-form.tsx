@@ -19,8 +19,8 @@ export function FeedbackForm({ snapshotId, onSuccess }: { snapshotId: string; on
       await api.supervisorFeedback(snapshotId, body, studentVisible, idempotencyKey);
       setBody('');
       onSuccess();
-    } catch (err: any) {
-      setError(err);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error('تعذر حفظ الملاحظة.'));
     } finally {
       setLoading(false);
     }

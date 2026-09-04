@@ -17,8 +17,8 @@ export function EvaluationForm({ snapshotId, onSuccess }: { snapshotId: string; 
       const idempotencyKey = crypto.randomUUID();
       await api.supervisorEvaluate(snapshotId, Number(score), idempotencyKey);
       onSuccess();
-    } catch (err: any) {
-      setError(err);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err : new Error('تعذر حفظ التقييم.'));
     } finally {
       setLoading(false);
     }
