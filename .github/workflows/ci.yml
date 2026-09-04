@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://dentpilot_app:app-development-only-change-me@localhost:5432/dentpilot
+      MIGRATION_DATABASE_URL: postgresql://dentpilot_migrator:migration-development-only-change-me@localhost:5432/dentpilot
+      SEED_DATABASE_URL: postgresql://dentpilot_migrator:migration-development-only-change-me@localhost:5432/dentpilot
+      ADMIN_DATABASE_URL: postgresql://dentpilot_owner:owner-development-only-change-me@localhost:5432/postgres
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minio-development-only-change-me
+      SESSION_COOKIE_SECRET: test-only-session-cookie-secret-change-me
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm run deps:audit -- --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+      - name: Start PostgreSQL and MinIO
+        run: npm run infra:up
+
+      - name: Wait for infrastructure
+        run: |
+          for i in $(seq 1 30); do
+            postgres_ok=$(docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U dentpilot_owner -d dentpilot >/dev/null 2>&1; echo $?)
+            minio_ok=$(curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; echo $?)
+            if [ "$postgres_ok" = 0 ] && [ "$minio_ok" = 0 ]; then exit 0; fi
+            sleep 2
+          done
+          docker compose -f infra/docker-compose.yml ps
+          exit 1
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Apply deterministic seed
+        run: npm run db:seed
+
+      - name: Migration tests
+        run: npm run test:migration
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Tear down infrastructure
+        if: always()
+        run: npm run infra:down
