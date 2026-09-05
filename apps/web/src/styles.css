@@ -54,7 +54,10 @@ h1, h2, h3, p { margin-top: 0; }
 .portal-shell { display: flex; min-height: 100vh; }
 .sidebar { background: var(--teal-950); bottom: 0; color: #fff; display: flex; flex-direction: column; padding: 1.6rem 1rem; position: fixed; right: 0; top: 0; width: 17rem; z-index: 30; }
 .sidebar .brand-lockup { border-bottom: 1px solid rgba(255,255,255,.12); margin: 0 .45rem 1.4rem; padding: 0 0 1.4rem; }
-.sidebar nav { display: grid; gap: .3rem; }
+.sidebar nav { display: grid; gap: .3rem; overflow-y: auto; }
+.sidebar .nav-section { display: grid; gap: .3rem; }
+.sidebar .nav-section + .nav-section { margin-top: .85rem; }
+.sidebar .nav-section-label { color: #7fa4a6; font-size: .66rem; font-weight: 700; letter-spacing: .08em; padding: .25rem .75rem .15rem; }
 .sidebar nav button { align-items: center; background: transparent; border: 0; border-right: 2px solid transparent; color: #bdd0d1; display: flex; gap: .8rem; padding: .78rem .75rem; text-align: right; transition: .18s ease; width: 100%; }
 .sidebar nav button > span { align-items: center; background: rgba(255,255,255,.07); color: #a8c6c8; display: flex; direction: ltr; font-family: "Source Code Pro", monospace; font-size: .66rem; height: 1.85rem; justify-content: center; min-width: 1.85rem; }
 .sidebar nav button:hover, .sidebar nav button.active { background: rgba(255,255,255,.07); border-right-color: var(--gold); color: #fff; }

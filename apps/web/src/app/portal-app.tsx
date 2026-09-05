@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AccountRole, SessionActorDto } from '@dentpilot/contracts';
 import { useSession } from '../auth/session';
-import { ErrorState, LoadingState } from '../components/ui';
+import { ErrorState, LoadingState, PageHeader } from '../components/ui';
 import { AssignmentsPage } from '../features/assignments/assignments-page';
 import { LoginPage } from '../features/auth/login-page';
 import { DepartmentsPage, GroupsPage } from '../features/catalogs/catalog-pages';
@@ -16,32 +16,93 @@ import { SupervisorDetailControlPage } from '../features/control/supervisor-deta
 import { SchedulesControlPage, ScheduleDetailControlPage } from '../features/control/schedule-management-page';
 
 interface NavigationItem { path: string; label: string; short: string; }
+interface NavigationSection { label: string; items: NavigationItem[]; }
 
-const adminNavigation: NavigationItem[] = [
-  { path: '/dashboard', label: 'لوحة المتابعة', short: 'DB' },
-  { path: '/students', label: 'الطلاب', short: 'ST' },
-  { path: '/departments', label: 'الأقسام', short: 'DP' },
-  { path: '/groups', label: 'المجموعات', short: 'GR' },
-  { path: '/assignments', label: 'تكليفات المشرفين', short: 'AS' },
-  { path: '/control/supervisors', label: 'إدارة المشرفين', short: 'SV' },
-  { path: '/control/schedules', label: 'الجداول الزمنية', short: 'SC' },
-  { path: '/submissions', label: 'التسليمات', short: 'SB' },
-  { path: '/reviews', label: 'المراجعات', short: 'RV' },
-  { path: '/reports', label: 'التقارير', short: 'RP' },
+const universityAdminNavigation: NavigationSection[] = [
+  { label: 'النظرة العامة', items: [{ path: '/dashboard', label: 'لوحة المتابعة', short: 'DB' }] },
+  {
+    label: 'الإدارة الأكاديمية',
+    items: [
+      { path: '/students', label: 'الطلاب', short: 'ST' },
+      { path: '/departments', label: 'الأقسام', short: 'DP' },
+      { path: '/groups', label: 'المجموعات والسجلات', short: 'GR' },
+      { path: '/assignments', label: 'نطاقات تكليف المشرفين', short: 'AS' },
+    ],
+  },
+  {
+    label: 'المشرفون والمناوبات',
+    items: [
+      { path: '/control/supervisors', label: 'دليل المشرفين', short: 'SV' },
+      { path: '/control/schedules', label: 'جداول المناوبات', short: 'SC' },
+    ],
+  },
+  {
+    label: 'العمليات السريرية',
+    items: [
+      { path: '/submissions', label: 'الحالات السريرية', short: 'CS' },
+      { path: '/reviews', label: 'قائمة المراجعة', short: 'RV' },
+    ],
+  },
+  { label: 'التقارير والإغلاق', items: [{ path: '/reports', label: 'التقارير', short: 'RP' }] },
 ];
 
-const supervisorNavigation: NavigationItem[] = [
-  { path: '/supervisor', label: 'المساحة السريرية', short: 'CS' },
+const departmentAdminNavigation: NavigationSection[] = [
+  { label: 'النظرة العامة', items: [{ path: '/dashboard', label: 'لوحة القسم', short: 'DB' }] },
+  {
+    label: 'الإدارة الأكاديمية',
+    items: [
+      { path: '/students', label: 'طلاب القسم', short: 'ST' },
+      { path: '/departments', label: 'بيانات الأقسام', short: 'DP' },
+      { path: '/groups', label: 'المجموعات والسجلات', short: 'GR' },
+      { path: '/assignments', label: 'نطاقات تكليف المشرفين', short: 'AS' },
+    ],
+  },
+  { label: 'التقارير', items: [{ path: '/reports', label: 'تقارير القسم', short: 'RP' }] },
+];
+
+const supervisorNavigation: NavigationSection[] = [
+  { label: 'العمليات السريرية', items: [{ path: '/supervisor', label: 'اليوم والمناوبة', short: 'TD' }] },
+];
+
+const studentNavigation: NavigationSection[] = [
+  { label: 'تجربة الطالب', items: [{ path: '/student', label: 'مساحة الطالب', short: 'ME' }] },
 ];
 
 const roleLabels: Record<AccountRole, string> = {
   UNIVERSITY_ADMIN: 'مسؤول الجامعة',
   DEPARTMENT_ADMIN: 'مسؤول القسم',
   CLINICAL_SUPERVISOR: 'مشرف سريري',
-  STUDENT_INTEGRATION: 'تكامل الطلاب',
+  STUDENT_INTEGRATION: 'طالب',
 };
 
-function pageFor(path: string, segments: string[]): ReactNode {
+function navigationForRole(role: AccountRole): NavigationSection[] {
+  if (role === 'UNIVERSITY_ADMIN') return universityAdminNavigation;
+  if (role === 'DEPARTMENT_ADMIN') return departmentAdminNavigation;
+  if (role === 'CLINICAL_SUPERVISOR') return supervisorNavigation;
+  return studentNavigation;
+}
+
+function flattenNavigation(sections: NavigationSection[]): NavigationItem[] {
+  return sections.flatMap((section) => section.items);
+}
+
+function StudentExperienceStatus() {
+  return <section className="surface state-card">
+    <PageHeader
+      eyebrow="STUDENT EXPERIENCE"
+      title="مساحة الطالب"
+      description="تم فصل حساب الطالب عن مساحات الإدارة والمشرفين."
+    />
+    <div className="empty-state">
+      <h2>الواجهة الطلابية قيد التجهيز</h2>
+      <p>يدعم النظام حاليًا هوية الطالب ومسارات المسودات والتسليمات من جهة الخادم، بينما لم تُعتمد بعد صفحات تشغيلية طلابية كاملة في هذه المرحلة.</p>
+      <p>لن تظهر لك أدوات الإدارة أو أدوات المشرف لأن صلاحيات الحساب يحددها الخادم، وليس التنقل في الواجهة.</p>
+    </div>
+  </section>;
+}
+
+function pageFor(path: string, segments: string[], role: AccountRole): ReactNode {
+  if (role === 'STUDENT_INTEGRATION') return path === '/student' ? <StudentExperienceStatus /> : null;
   if (path === '/dashboard') return <DashboardPage />;
   if (path === '/students') return <StudentsPage />;
   if (segments[0] === 'students' && segments[1]) return <StudentDetailPage id={segments[1]} />;
@@ -62,6 +123,7 @@ function pageFor(path: string, segments: string[]): ReactNode {
 
 function routeIsVisible(path: string, items: NavigationItem[]): boolean {
   if (items.some((item) => item.path === path)) return true;
+  if (path === '/student') return items.some((item) => item.path === '/student');
   if (path.startsWith('/students/')) return items.some((item) => item.path === '/students');
   if (path.startsWith('/submissions/')) return items.some((item) => item.path === '/submissions' || item.path === '/reviews');
   if (path.startsWith('/control/supervisors/')) return items.some((item) => item.path === '/control/supervisors');
@@ -74,9 +136,10 @@ function PortalShell({ actor }: { actor: SessionActorDto }) {
   const session = useSession();
   const location = useHashRoute();
   const [menuOpen, setMenuOpen] = useState(false);
-  const navigation = actor.role === 'CLINICAL_SUPERVISOR' ? supervisorNavigation : adminNavigation;
-  const defaultPath = navigation[0]?.path;
-  const visible = routeIsVisible(location.path, navigation);
+  const navigation = navigationForRole(actor.role);
+  const navigationItems = flattenNavigation(navigation);
+  const defaultPath = navigationItems[0]?.path;
+  const visible = routeIsVisible(location.path, navigationItems);
 
   useEffect(() => {
     if (!visible && defaultPath) navigate(defaultPath);
@@ -92,12 +155,17 @@ function PortalShell({ actor }: { actor: SessionActorDto }) {
     document.getElementById('page-content')?.focus();
   }, [location.path]);
 
-  const activeItem = navigation.find((item) => location.path === item.path || location.path.startsWith(`${item.path}/`));
+  const activeItem = navigationItems.find((item) => location.path === item.path || location.path.startsWith(`${item.path}/`));
   return <div className="portal-shell" dir="rtl">
     <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
-      <div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>University Portal</small></span></div>
-      <nav aria-label="التنقل الرئيسي">{navigation.map((item) => <button type="button" key={item.path} aria-current={activeItem?.path === item.path ? 'page' : undefined} className={activeItem?.path === item.path ? 'active' : ''} onClick={() => { navigate(item.path); setMenuOpen(false); }}><span>{item.short}</span>{item.label}</button>)}</nav>
-      <div className="sidebar-foot"><small>Production API</small><b>Server authoritative</b></div>
+      <div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div>
+      <nav aria-label="التنقل الرئيسي">
+        {navigation.map((section) => <div className="nav-section" key={section.label}>
+          <span className="nav-section-label">{section.label}</span>
+          {section.items.map((item) => <button type="button" key={item.path} aria-current={activeItem?.path === item.path ? 'page' : undefined} className={activeItem?.path === item.path ? 'active' : ''} onClick={() => { navigate(item.path); setMenuOpen(false); }}><span>{item.short}</span>{item.label}</button>)}
+        </div>)}
+      </nav>
+      <div className="sidebar-foot"><small>مصدر الصلاحيات</small><b>الخادم هو المرجع الوحيد</b></div>
     </aside>
     {menuOpen ? <button className="menu-backdrop" aria-label="إغلاق القائمة" onClick={() => setMenuOpen(false)} /> : null}
     <div className="portal-workspace">
@@ -106,15 +174,15 @@ function PortalShell({ actor }: { actor: SessionActorDto }) {
         <div className="context-title"><small>المساحة الحالية</small><b>{activeItem?.label ?? 'DentPilot'}</b></div>
         <div className="actor-card"><span className="actor-avatar">{actor.role.slice(0, 2)}</span><div><b>{roleLabels[actor.role]}</b><small>{actor.departmentIds.length ? `${actor.departmentIds.length} نطاق قسم` : 'نطاق المؤسسة'}</small></div><button type="button" className="button ghost" onClick={() => void session.logout()}>خروج</button></div>
       </header>
-      <main id="page-content" className="page-content" tabIndex={-1}>{visible ? pageFor(location.path, location.segments) : <LoadingState />}</main>
+      <main id="page-content" className="page-content" tabIndex={-1}>{visible ? pageFor(location.path, location.segments, actor.role) : <LoadingState />}</main>
     </div>
   </div>;
 }
 
 export function PortalApp() {
   const session = useSession();
-  if (session.status === 'loading') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>University Portal</small></span></div><LoadingState label="جارٍ استعادة الجلسة الآمنة…" /></main>;
+  if (session.status === 'loading') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div><LoadingState label="جارٍ استعادة الجلسة الآمنة…" /></main>;
   if (session.status === 'anonymous') return <LoginPage />;
-  if (session.status === 'error') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>University Portal</small></span></div><ErrorState error={session.error} onRetry={() => void session.refresh()} /></main>;
+  if (session.status === 'error') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div><ErrorState error={session.error} onRetry={() => void session.refresh()} /></main>;
   return <PortalShell actor={session.actor} />;
 }

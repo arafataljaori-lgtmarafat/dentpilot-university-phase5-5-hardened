@@ -53,9 +53,9 @@ describe('Phase 2B frontend production boundary', () => {
 
   it('does not encode a client-side role permission matrix in navigation', () => {
     const shell = readFileSync(join(webSourceRoot, 'app/portal-app.tsx'), 'utf8');
-    const navigationDeclaration = shell.slice(shell.indexOf('const navigation'), shell.indexOf('const roleLabels'));
+    const navigationDeclaration = shell.slice(shell.indexOf('const universityAdminNavigation'), shell.indexOf('const roleLabels'));
     expect(navigationDeclaration).not.toContain('roles:');
     expect(navigationDeclaration).not.toMatch(/UNIVERSITY_ADMIN|DEPARTMENT_ADMIN|CLINICAL_SUPERVISOR|STUDENT_INTEGRATION/);
-    expect(shell).toContain('Server authoritative');
+    expect(shell).toContain('الخادم هو المرجع الوحيد');
   });
 });
