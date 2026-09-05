@@ -47,20 +47,6 @@ const universityAdminNavigation: NavigationSection[] = [
   { label: 'التقارير والتدقيق', items: [{ path: '/reports', label: 'التقارير التشغيلية', short: 'RP' }] },
 ];
 
-const departmentAdminNavigation: NavigationSection[] = [
-  { label: 'النظرة العامة', items: [{ path: '/dashboard', label: 'لوحة القسم', short: 'DB' }] },
-  {
-    label: 'البنية الأكاديمية',
-    items: [
-      { path: '/students', label: 'طلاب القسم', short: 'ST' },
-      { path: '/departments', label: 'مرجع الأقسام', short: 'DP' },
-      { path: '/groups', label: 'المجموعات والتسجيلات', short: 'GR' },
-    ],
-  },
-  { label: 'العمليات السريرية', items: [{ path: '/control/clinical-operations/cases', label: 'سجل الحالات والكاسشيتات', short: 'CS' }, { path: '/control/clinical-operations/reviews', label: 'مراقبة المراجعات', short: 'RV' }] },
-  { label: 'تقارير القسم', items: [{ path: '/reports', label: 'تقارير القسم', short: 'RP' }] },
-];
-
 const supervisorNavigation: NavigationSection[] = [
   { label: 'العمليات السريرية', items: [{ path: '/supervisor', label: 'الرئيسية', short: 'HM' }, { path: '/supervisor/daily-sheet', label: 'اليوم والمناوبة', short: 'TD' }, { path: '/supervisor/queue', label: 'مراجعة الأعمال', short: 'RQ' }] },
   { label: 'السجل', items: [{ path: '/supervisor/history', label: 'السجل التاريخي', short: 'HI' }] },
@@ -73,16 +59,16 @@ const studentNavigation: NavigationSection[] = [
 
 const roleLabels: Record<AccountRole, string> = {
   UNIVERSITY_ADMIN: 'مسؤول الجامعة',
-  DEPARTMENT_ADMIN: 'مسؤول القسم',
+  DEPARTMENT_ADMIN: 'دور قديم غير معتمد',
   CLINICAL_SUPERVISOR: 'مشرف سريري',
   STUDENT_INTEGRATION: 'طالب',
 };
 
 function navigationForRole(role: AccountRole): NavigationSection[] {
   if (role === 'UNIVERSITY_ADMIN') return universityAdminNavigation;
-  if (role === 'DEPARTMENT_ADMIN') return departmentAdminNavigation;
   if (role === 'CLINICAL_SUPERVISOR') return supervisorNavigation;
-  return studentNavigation;
+  if (role === 'STUDENT_INTEGRATION') return studentNavigation;
+  return [];
 }
 
 function flattenNavigation(sections: NavigationSection[]): NavigationItem[] {
@@ -102,6 +88,20 @@ function StudentExperienceStatus() {
       <p>لن تظهر لك أدوات الإدارة أو أدوات المشرف لأن صلاحيات الحساب يحددها الخادم، وليس التنقل في الواجهة.</p>
     </div>
   </section>;
+}
+
+function RetiredRoleStatus() {
+  return <main className="boot-screen" dir="rtl">
+    <div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div>
+    <section className="surface state-card">
+      <PageHeader
+        eyebrow="ROLE ALIGNMENT"
+        title="هذا الدور غير معتمد في نموذج المنتج الحالي"
+        description="يعمل DentPilot الآن بثلاث مساحات فقط: Control، المشرف السريري، والطالب. لا يوفّر هذا Portal مسارات تشغيلية لحساب مسؤول القسم القديم."
+      />
+      <p>تتطلب إزالة الدور نهائيًا من الحسابات والعقود والصلاحيات مرحلة Backend مستقلة ومضبوطة. لم تُجرَ أي تغييرات على صلاحيات الخادم هنا.</p>
+    </section>
+  </main>;
 }
 
 function pageFor(path: string, segments: string[], role: AccountRole): ReactNode {
@@ -193,5 +193,6 @@ export function PortalApp() {
   if (session.status === 'loading') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div><LoadingState label="جارٍ استعادة الجلسة الآمنة…" /></main>;
   if (session.status === 'anonymous') return <LoginPage />;
   if (session.status === 'error') return <main className="boot-screen"><div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div><ErrorState error={session.error} onRetry={() => void session.refresh()} /></main>;
+  if (session.actor.role === 'DEPARTMENT_ADMIN') return <RetiredRoleStatus />;
   return <PortalShell actor={session.actor} />;
 }
