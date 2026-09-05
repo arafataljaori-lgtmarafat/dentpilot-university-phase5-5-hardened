@@ -16,6 +16,7 @@ const requiredPaths:Record<string,string[]>= {
   '/api/v1/term-results/{id}/reviewed':['post'], '/api/v1/term-results/{id}/approved':['post'], '/api/v1/term-results/{id}/locked':['post'], '/api/v1/term-results/{id}/reopened':['post'],
   '/api/v1/staff/submissions':['get'], '/api/v1/reports/aggregate':['get'], '/api/v1/reports/dashboard':['get'], '/api/v1/reports/scoped':['get'],
   '/api/v1/files/presign-upload':['post'], '/api/v1/files/{id}/complete':['post'], '/api/v1/files/{id}/attachments':['post'], '/api/v1/files/{id}/presign-read':['get'],
+  '/api/v1/supervisor/daily-sheet':['get'], '/api/v1/supervisor/review-queue':['get'], '/api/v1/supervisor/history':['get'], '/api/v1/supervisor/work-summary':['get'], '/api/v1/supervisor/capabilities':['get'],
 };
 let core:ProductionCore;
 

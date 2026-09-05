@@ -66,7 +66,7 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
 
     {actionError && <ErrorState error={actionError} onRetry={() => setActionError(null)} />}
 
-    <div className="layout-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+    <div className="supervisor-case-detail-layout">
       <div className="main-col">
         <section className="surface">
           <div className="surface-heading">
@@ -92,7 +92,7 @@ export function SupervisorCaseDetail({ id }: { id: string }) {
             <h2>الإجراءات السريرية</h2>
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="supervisor-case-actions">
             {canApproveStart && (
               <button 
                 className="button primary" 

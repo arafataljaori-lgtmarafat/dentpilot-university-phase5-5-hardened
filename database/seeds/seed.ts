@@ -87,6 +87,11 @@ async function main(): Promise<void> {
       [ids.dutyMember, ids.org, ids.shift, ids.assignment, ids.permGrant]
     );
 
+    await client.query(
+      'INSERT INTO clinical_case_duty_links(organization_id,case_sheet_id,shift_id) VALUES($1,$2,$3)',
+      [ids.org, ids.caseSheet, ids.shift]
+    );
+
     await client.query('INSERT INTO audit_events(organization_id,actor_account_id,actor_role,action,entity_type,entity_id,department_id,correlation_id,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,gen_random_uuid(),$8)', [ids.org,ids.admin,'UNIVERSITY_ADMIN','SEED_COMPLETED','organization',ids.org,ids.op,{environment:'development'}]);
     await client.query('COMMIT'); console.log('Deterministic development seed applied.');
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { await client.end(); }

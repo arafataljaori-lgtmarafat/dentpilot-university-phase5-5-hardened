@@ -175,3 +175,91 @@ export interface SupervisorCaseDetailDto {
   payload: Record<string, unknown>;
   allowedActions: SupervisorAction[];
 }
+
+export type SupervisorNextAction = 'START_APPROVAL' | 'COMPLETION_APPROVAL' | 'EVALUATION' | 'FEEDBACK' | 'NONE';
+export type SupervisorCapability =
+  | 'DAILY_SHEET_READ'
+  | 'REVIEW_QUEUE_READ'
+  | 'HISTORY_READ'
+  | 'WORK_SUMMARY_READ'
+  | 'START_APPROVAL'
+  | 'COMPLETION_APPROVAL'
+  | 'CASESHEET_EVALUATION'
+  | 'CLINICAL_FEEDBACK';
+
+export interface SupervisorDailySheetItemDto {
+  snapshot_id: string;
+  case_sheet_id: string;
+  student_id: string;
+  student_number: string;
+  student_display_name: string;
+  department_id: string;
+  department_name: string;
+  requirement_id: string | null;
+  subject_code: string | null;
+  subject_name: string | null;
+  shift_id: string;
+  shift_starts_at: string;
+  shift_ends_at: string;
+  case_status: SubmissionStatus;
+  start_status: 'PENDING' | 'APPROVED';
+  completion_status: 'PENDING' | 'APPROVED';
+  evaluation_status: 'PENDING' | 'RECORDED';
+  evaluation_score: number | null;
+  next_action: SupervisorNextAction;
+  allowedActions: SupervisorAction[];
+}
+
+export interface SupervisorDailySheetDto {
+  duty: SupervisorDutyDto | null;
+  items: SupervisorDailySheetItemDto[];
+  generated_at: string;
+}
+
+export interface SupervisorReviewQueueItemDto extends SupervisorDailySheetItemDto {
+  action_required: SupervisorNextAction;
+  original_duty_date: string;
+  is_action_allowed_now: boolean;
+}
+
+export interface SupervisorReviewQueueDto {
+  items: SupervisorReviewQueueItemDto[];
+  generated_at: string;
+}
+
+export interface SupervisorHistoryShiftDto {
+  shift_id: string;
+  starts_at: string;
+  ends_at: string;
+  status: LifecycleStatus;
+}
+
+export interface SupervisorHistoryDayItemDto extends SupervisorDailySheetItemDto {
+  status_at_day_end: SubmissionStatus;
+  performed_actions: string[];
+  remained_pending: boolean;
+}
+
+export interface SupervisorHistoryDayDto {
+  date: string;
+  shifts: SupervisorHistoryShiftDto[];
+  items: SupervisorHistoryDayItemDto[];
+  generated_at: string;
+}
+
+export interface SupervisorWorkSummaryDto {
+  academic_year_id: string;
+  term_id: string | null;
+  supervision_days: number;
+  start_approvals: number;
+  completion_approvals: number;
+  evaluations: number;
+  feedback_notes: number;
+  deferred_work: number;
+  generated_at: string;
+}
+
+export interface SupervisorCapabilitiesDto {
+  capabilities: SupervisorCapability[];
+  generated_at: string;
+}

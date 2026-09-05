@@ -14,6 +14,7 @@ import { SupervisorWorkspace } from '../features/supervisor/supervisor-workspace
 import { SupervisorListControlPage } from '../features/control/supervisor-list-page';
 import { SupervisorDetailControlPage } from '../features/control/supervisor-detail-page';
 import { SchedulesControlPage, ScheduleDetailControlPage } from '../features/control/schedule-management-page';
+import { ClinicalCaseDetailControlPage, ClinicalCaseRegistryControlPage, ClinicalReviewMonitoringControlPage } from '../features/control/clinical-operations-page';
 
 interface NavigationItem { path: string; label: string; short: string; }
 interface NavigationSection { label: string; items: NavigationItem[]; }
@@ -21,47 +22,49 @@ interface NavigationSection { label: string; items: NavigationItem[]; }
 const universityAdminNavigation: NavigationSection[] = [
   { label: 'النظرة العامة', items: [{ path: '/dashboard', label: 'لوحة المتابعة', short: 'DB' }] },
   {
-    label: 'الإدارة الأكاديمية',
+    label: 'البنية الأكاديمية',
     items: [
       { path: '/students', label: 'الطلاب', short: 'ST' },
-      { path: '/departments', label: 'الأقسام', short: 'DP' },
-      { path: '/groups', label: 'المجموعات والسجلات', short: 'GR' },
-      { path: '/assignments', label: 'نطاقات تكليف المشرفين', short: 'AS' },
+      { path: '/departments', label: 'الأقسام والبرامج', short: 'DP' },
+      { path: '/groups', label: 'المجموعات والتسجيلات', short: 'GR' },
     ],
   },
   {
     label: 'المشرفون والمناوبات',
     items: [
       { path: '/control/supervisors', label: 'دليل المشرفين', short: 'SV' },
-      { path: '/control/schedules', label: 'جداول المناوبات', short: 'SC' },
+      { path: '/control/schedules', label: 'المناوبات', short: 'SC' },
+      { path: '/assignments', label: 'نطاقات الإشراف', short: 'AS' },
     ],
   },
   {
     label: 'العمليات السريرية',
     items: [
-      { path: '/submissions', label: 'الحالات السريرية', short: 'CS' },
-      { path: '/reviews', label: 'قائمة المراجعة', short: 'RV' },
+      { path: '/control/clinical-operations/cases', label: 'سجل الحالات والكاسشيتات', short: 'CS' },
+      { path: '/control/clinical-operations/reviews', label: 'مراقبة المراجعات', short: 'RV' },
     ],
   },
-  { label: 'التقارير والإغلاق', items: [{ path: '/reports', label: 'التقارير', short: 'RP' }] },
+  { label: 'التقارير والتدقيق', items: [{ path: '/reports', label: 'التقارير التشغيلية', short: 'RP' }] },
 ];
 
 const departmentAdminNavigation: NavigationSection[] = [
   { label: 'النظرة العامة', items: [{ path: '/dashboard', label: 'لوحة القسم', short: 'DB' }] },
   {
-    label: 'الإدارة الأكاديمية',
+    label: 'البنية الأكاديمية',
     items: [
       { path: '/students', label: 'طلاب القسم', short: 'ST' },
-      { path: '/departments', label: 'بيانات الأقسام', short: 'DP' },
-      { path: '/groups', label: 'المجموعات والسجلات', short: 'GR' },
-      { path: '/assignments', label: 'نطاقات تكليف المشرفين', short: 'AS' },
+      { path: '/departments', label: 'مرجع الأقسام', short: 'DP' },
+      { path: '/groups', label: 'المجموعات والتسجيلات', short: 'GR' },
     ],
   },
-  { label: 'التقارير', items: [{ path: '/reports', label: 'تقارير القسم', short: 'RP' }] },
+  { label: 'العمليات السريرية', items: [{ path: '/control/clinical-operations/cases', label: 'سجل الحالات والكاسشيتات', short: 'CS' }, { path: '/control/clinical-operations/reviews', label: 'مراقبة المراجعات', short: 'RV' }] },
+  { label: 'تقارير القسم', items: [{ path: '/reports', label: 'تقارير القسم', short: 'RP' }] },
 ];
 
 const supervisorNavigation: NavigationSection[] = [
-  { label: 'العمليات السريرية', items: [{ path: '/supervisor', label: 'اليوم والمناوبة', short: 'TD' }] },
+  { label: 'العمليات السريرية', items: [{ path: '/supervisor', label: 'الرئيسية', short: 'HM' }, { path: '/supervisor/daily-sheet', label: 'اليوم والمناوبة', short: 'TD' }, { path: '/supervisor/queue', label: 'مراجعة الأعمال', short: 'RQ' }] },
+  { label: 'السجل', items: [{ path: '/supervisor/history', label: 'السجل التاريخي', short: 'HI' }] },
+  { label: 'التحليل', items: [{ path: '/supervisor/summary', label: 'ملخص أعمال المشرف', short: 'SM' }] },
 ];
 
 const studentNavigation: NavigationSection[] = [
@@ -109,6 +112,9 @@ function pageFor(path: string, segments: string[], role: AccountRole): ReactNode
   if (path === '/departments') return <DepartmentsPage />;
   if (path === '/groups') return <GroupsPage />;
   if (path === '/assignments') return <AssignmentsPage />;
+  if (path === '/control/clinical-operations/cases') return <ClinicalCaseRegistryControlPage />;
+  if (path === '/control/clinical-operations/reviews') return <ClinicalReviewMonitoringControlPage />;
+  if (segments[0] === 'control' && segments[1] === 'clinical-operations' && segments[2] === 'cases' && segments[3]) return <ClinicalCaseDetailControlPage id={segments[3]} />;
   if (path === '/submissions') return <SubmissionsPage />;
   if (path === '/reviews') return <SubmissionsPage reviewQueue />;
   if (segments[0] === 'submissions' && segments[1]) return <SubmissionDetailPage id={segments[1]} />;
@@ -125,6 +131,7 @@ function routeIsVisible(path: string, items: NavigationItem[]): boolean {
   if (items.some((item) => item.path === path)) return true;
   if (path === '/student') return items.some((item) => item.path === '/student');
   if (path.startsWith('/students/')) return items.some((item) => item.path === '/students');
+  if (path.startsWith('/control/clinical-operations/')) return items.some((item) => item.path === '/control/clinical-operations/cases' || item.path === '/control/clinical-operations/reviews');
   if (path.startsWith('/submissions/')) return items.some((item) => item.path === '/submissions' || item.path === '/reviews');
   if (path.startsWith('/control/supervisors/')) return items.some((item) => item.path === '/control/supervisors');
   if (path.startsWith('/control/schedules/')) return items.some((item) => item.path === '/control/schedules');
@@ -155,10 +162,10 @@ function PortalShell({ actor }: { actor: SessionActorDto }) {
     document.getElementById('page-content')?.focus();
   }, [location.path]);
 
-  const activeItem = navigationItems.find((item) => location.path === item.path || location.path.startsWith(`${item.path}/`));
+  const activeItem = [...navigationItems].sort((left, right) => right.path.length - left.path.length).find((item) => location.path === item.path || location.path.startsWith(`${item.path}/`));
   return <div className="portal-shell" dir="rtl">
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
-      <div className="brand-lockup dark"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="تنقل DentPilot الرئيسي">
+      <div className="brand-lockup dark sidebar-brand"><span className="brand-mark">DP</span><span><b>DentPilot</b><small>كلية طب الأسنان · جامعة الجزيرة</small></span></div>
       <nav aria-label="التنقل الرئيسي">
         {navigation.map((section) => <div className="nav-section" key={section.label}>
           <span className="nav-section-label">{section.label}</span>
@@ -170,9 +177,11 @@ function PortalShell({ actor }: { actor: SessionActorDto }) {
     {menuOpen ? <button className="menu-backdrop" aria-label="إغلاق القائمة" onClick={() => setMenuOpen(false)} /> : null}
     <div className="portal-workspace">
       <header className="topbar">
-        <button type="button" className="mobile-menu" aria-label="فتح القائمة" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>☰</button>
-        <div className="context-title"><small>المساحة الحالية</small><b>{activeItem?.label ?? 'DentPilot'}</b></div>
-        <div className="actor-card"><span className="actor-avatar">{actor.role.slice(0, 2)}</span><div><b>{roleLabels[actor.role]}</b><small>{actor.departmentIds.length ? `${actor.departmentIds.length} نطاق قسم` : 'نطاق المؤسسة'}</small></div><button type="button" className="button ghost" onClick={() => void session.logout()}>خروج</button></div>
+        <div className="topbar-leading">
+          <button type="button" className="mobile-menu" aria-label="فتح القائمة" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><span aria-hidden="true">☰</span></button>
+          <div className="context-title"><small>المساحة الحالية</small><b>{activeItem?.label ?? 'DentPilot'}</b></div>
+        </div>
+        <div className="actor-card"><span className="actor-avatar" aria-hidden="true">{actor.role.slice(0, 2)}</span><div><b>{roleLabels[actor.role]}</b><small>{actor.departmentIds.length ? `${actor.departmentIds.length} نطاق قسم` : 'نطاق المؤسسة'}</small></div><button type="button" className="button ghost" onClick={() => void session.logout()}>خروج</button></div>
       </header>
       <main id="page-content" className="page-content" tabIndex={-1}>{visible ? pageFor(location.path, location.segments, actor.role) : <LoadingState />}</main>
     </div>

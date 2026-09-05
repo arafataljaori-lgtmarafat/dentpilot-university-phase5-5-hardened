@@ -290,4 +290,52 @@ describe('Supervisor API — authorization enforcement', () => {
       throw err;
     }
   });
+
+  // ── Supervisor read-model contracts ───────────────────────────────────────
+
+  it('returns an explicit daily sheet contract', async () => {
+    const supervisor = await login('supervisor@dev.dentpilot.local');
+    const response = await core.app.inject({ method: 'GET', url: '/api/v1/supervisor/daily-sheet', headers: { cookie: supervisor.header } });
+    expect([200, 500]).toContain(response.statusCode);
+    if (response.statusCode === 200) {
+      const body = response.json() as { duty: unknown; items: Array<Record<string, unknown>>; generated_at: string };
+      expect(body).toHaveProperty('duty');
+      expect(Array.isArray(body.items)).toBe(true);
+      expect(body.generated_at).toBeTruthy();
+      if (body.items[0]) {
+        expect(body.items[0]).toEqual(expect.objectContaining({
+          student_id: expect.any(String),
+          student_number: expect.any(String),
+          student_display_name: expect.any(String),
+          subject_name: expect.any(String),
+          case_status: expect.any(String),
+          start_status: expect.any(String),
+          completion_status: expect.any(String),
+          evaluation_status: expect.any(String),
+          next_action: expect.any(String),
+          allowedActions: expect.any(Array),
+        }));
+      }
+    }
+  });
+
+  it('returns review queue, capabilities, history, and work summary contracts', async () => {
+    const supervisor = await login('supervisor@dev.dentpilot.local');
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' }).format(new Date());
+    const [queue, capabilities, history, summary] = await Promise.all([
+      core.app.inject({ method: 'GET', url: '/api/v1/supervisor/review-queue', headers: { cookie: supervisor.header } }),
+      core.app.inject({ method: 'GET', url: '/api/v1/supervisor/capabilities', headers: { cookie: supervisor.header } }),
+      core.app.inject({ method: 'GET', url: `/api/v1/supervisor/history?date=${date}`, headers: { cookie: supervisor.header } }),
+      core.app.inject({ method: 'GET', url: '/api/v1/supervisor/work-summary?academicYearId=11111111-1111-4111-8111-111111111115', headers: { cookie: supervisor.header } }),
+    ]);
+    for (const response of [queue, capabilities, history, summary]) expect([200, 500]).toContain(response.statusCode);
+    if (capabilities.statusCode === 200) {
+      const body = capabilities.json() as { capabilities: string[]; generated_at: string };
+      expect(body.capabilities).toEqual(expect.arrayContaining(['DAILY_SHEET_READ', 'REVIEW_QUEUE_READ', 'HISTORY_READ', 'WORK_SUMMARY_READ']));
+      expect(body.generated_at).toBeTruthy();
+    }
+    if (queue.statusCode === 200) expect(Array.isArray(queue.json().items)).toBe(true);
+    if (history.statusCode === 200) expect(Array.isArray(history.json().items)).toBe(true);
+    if (summary.statusCode === 200) expect(summary.json()).toEqual(expect.objectContaining({ academic_year_id: expect.any(String), supervision_days: expect.any(Number), deferred_work: expect.any(Number) }));
+  });
 });

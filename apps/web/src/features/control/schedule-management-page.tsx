@@ -1,165 +1,104 @@
-import { useState } from 'react';
-import { api, newIdempotencyKey } from '../../api/client';
-import type { DutyShiftDto } from '@dentpilot/contracts';
+import { useMemo, useState } from 'react';
+import type { DutyScheduleDetailDto, DutyScheduleDto, DutyShiftDto } from '@dentpilot/contracts';
+import { api } from '../../api/client';
 import { useResource } from '../../api/use-resource';
-import { ErrorState, LoadingState, PageHeader } from '../../components/ui';
+import { DataTable, EmptyState, ErrorState, Field, LoadingState, PageHeader } from '../../components/ui';
 import { navigate } from '../../routing/hash-router';
 
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString('ar-EG');
+}
+
+function formatTime(value: string): string {
+  return new Date(value).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+}
+
+function shortId(value: string): string {
+  return value.split('-')[0];
+}
+
+function ScheduleDirectoryRow({ schedule, departmentName, academicYearLabel }: { schedule: DutyScheduleDto; departmentName: string; academicYearLabel: string }) {
+  return <tr key={schedule.id}>
+    <td><b className="mono">{shortId(schedule.id)}</b><small className="block mono">{schedule.id}</small></td>
+    <td>{departmentName}</td>
+    <td>{academicYearLabel}</td>
+    <td>{formatDate(schedule.valid_from)} — {formatDate(schedule.valid_to)}</td>
+    <td className="mono">{schedule.timezone}</td>
+    <td><button type="button" className="button ghost small" onClick={() => navigate(`/control/schedules/${schedule.id}`)}>فتح التفاصيل</button></td>
+  </tr>;
+}
+
 export function SchedulesControlPage() {
-  const { data, error, loading, reload } = useResource(() => api.controlSchedules(), []);
+  const resources = useResource(() => Promise.all([api.controlSchedules(), api.departments(), api.academicYears()]), []);
+  const [query, setQuery] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [academicYearId, setAcademicYearId] = useState('');
 
-  const [creating, setCreating] = useState(false);
+  const schedules = resources.data?.[0].items ?? [];
+  const departments = resources.data?.[1] ?? [];
+  const academicYears = resources.data?.[2] ?? [];
+  const visibleSchedules = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return schedules.filter((schedule) => {
+      const matchesQuery = !normalizedQuery || schedule.id.toLocaleLowerCase().includes(normalizedQuery) || schedule.timezone.toLocaleLowerCase().includes(normalizedQuery);
+      return matchesQuery && (!departmentId || schedule.department_id === departmentId) && (!academicYearId || schedule.academic_year_id === academicYearId);
+    });
+  }, [academicYearId, departmentId, query, schedules]);
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState error={error} onRetry={reload} />;
+  if (resources.loading) return <LoadingState label="جارٍ تحميل جداول المناوبات…" />;
+  if (resources.error) return <ErrorState error={resources.error} onRetry={resources.reload} />;
 
-  const schedules = data?.items || [];
+  return <>
+    <PageHeader
+      eyebrow="SUPERVISORS & SCHEDULES · CONTROL"
+      title="جداول المناوبات"
+      description="دليل إداري للقراءة فقط يعرض الجداول والشفتات والمشرفين الذين أعادهم الخادم."
+      actions={<span className="read-only-label">قراءة فقط</span>}
+    />
 
-  return (
-    <div className="schedules-page">
-      <PageHeader
-        eyebrow="الجامعة"
-        title="الجداول الزمنية السريرية"
-        description="إدارة جداول المناوبات السريرية للمشرفين وتوزيعهم"
-        actions={
-          <button className="button primary" disabled={creating} onClick={() => alert('إنشاء جدول جديد غير مدعوم في هذه الواجهة التجريبية')}>
-            إنشاء جدول جديد
-          </button>
-        }
-      />
-
-      <div className="card table-card" style={{ background: 'var(--surface-color)', borderRadius: '8px', overflow: 'hidden' }}>
-        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <th style={{ padding: '12px 16px' }}>رقم الجدول</th>
-              <th style={{ padding: '12px 16px' }}>يبدأ من</th>
-              <th style={{ padding: '12px 16px' }}>ينتهي في</th>
-              <th style={{ padding: '12px 16px' }}>المنطقة الزمنية</th>
-              <th style={{ padding: '12px 16px' }}>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedules.map((sch) => (
-              <tr key={sch.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 16px', fontWeight: 'bold', fontFamily: 'monospace' }}>
-                  {sch.id.split('-')[0]}
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  {new Date(sch.valid_from).toLocaleDateString('ar-EG')}
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  {new Date(sch.valid_to).toLocaleDateString('ar-EG')}
-                </td>
-                <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>
-                  {sch.timezone}
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <button
-                    type="button"
-                    className="button ghost small"
-                    onClick={() => navigate(`/control/schedules/${sch.id}`)}
-                  >
-                    التفاصيل والمناوبات
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {schedules.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  لا توجد جداول زمنية مسجلة
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+    <section className="surface filter-panel" aria-label="فلاتر جداول المناوبات">
+      <div className="filter-row">
+        <Field label="بحث"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="معرف الجدول أو المنطقة الزمنية" /></Field>
+        <Field label="القسم"><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">كل الأقسام</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Field>
+        <Field label="السنة الأكاديمية"><select value={academicYearId} onChange={(event) => setAcademicYearId(event.target.value)}><option value="">كل السنوات</option>{academicYears.map((year) => <option key={year.id} value={year.id}>{year.label}</option>)}</select></Field>
       </div>
-    </div>
-  );
+      <small className="filter-help">لا توجد إجراءات إنشاء أو تعديل أو حذف في هذه المرحلة.</small>
+    </section>
+
+    {!schedules.length ? <EmptyState title="لا توجد جداول مناوبات" description="لم يعُد الخادم جداول ضمن نطاق الحساب الحالي." /> : !visibleSchedules.length ? <EmptyState title="لا توجد نتائج مطابقة" description="غيّر البحث أو الفلاتر لعرض جداول أخرى." /> : <section className="surface"><div className="surface-heading"><div><span className="eyebrow">READ-ONLY SCHEDULE DIRECTORY</span><h2>الجداول ضمن النطاق</h2></div><span className="directory-count">{visibleSchedules.length} من {schedules.length}</span></div><DataTable><thead><tr><th>الجدول</th><th>القسم</th><th>السنة الأكاديمية</th><th>الفترة</th><th>المنطقة الزمنية</th><th /></tr></thead><tbody>{visibleSchedules.map((schedule) => <ScheduleDirectoryRow key={schedule.id} schedule={schedule} departmentName={departments.find((item) => item.id === schedule.department_id)?.name ?? shortId(schedule.department_id)} academicYearLabel={academicYears.find((item) => item.id === schedule.academic_year_id)?.label ?? shortId(schedule.academic_year_id)} />)}</tbody></DataTable></section>}
+  </>;
+}
+
+function ShiftStatus({ value }: { value: DutyShiftDto['status'] }) {
+  const active = value === 'ACTIVE';
+  return <span className={`status-badge status-${active ? 'active' : 'inactive'}`}>{active ? 'نشطة' : value === 'CLOSED' ? 'مغلقة' : value === 'REMOVED' ? 'محذوفة' : 'مؤرشفة'}</span>;
 }
 
 export function ScheduleDetailControlPage({ id }: { id: string }) {
-  const { data, error, loading, reload } = useResource(() => api.controlScheduleDetail(id), [id]);
+  const { data, error, loading, reload } = useResource<DutyScheduleDetailDto>(() => api.controlScheduleDetail(id), [id]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState label="جارٍ تحميل تفاصيل جدول المناوبات…" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
+  if (!data) return <EmptyState title="لا توجد بيانات للجدول" description="لم يعُد الخادم تفاصيل هذا الجدول ضمن نطاق الحساب." />;
 
-  const schedule = data;
-  if (!schedule) return <div>لا توجد بيانات للجدول</div>;
-  const shifts = schedule.shifts;
-
-  // Group shifts by day
-  const groupedShifts = shifts.reduce<Record<string, DutyShiftDto[]>>((acc, shift) => {
+  const groupedShifts = data.shifts.reduce<Record<string, DutyShiftDto[]>>((acc, shift) => {
     const day = new Date(shift.starts_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     if (!acc[day]) acc[day] = [];
     acc[day].push(shift);
     return acc;
   }, {});
 
-  return (
-    <div className="schedule-detail-page">
-      <PageHeader
-        eyebrow="الجامعة"
-        title={`جدول المناوبات: ${schedule.id.split('-')[0]}`}
-        description={`من ${new Date(schedule.valid_from).toLocaleDateString('ar-EG')} إلى ${new Date(schedule.valid_to).toLocaleDateString('ar-EG')}`}
-        actions={
-          <button className="button ghost" onClick={() => navigate('/control/schedules')}>
-            العودة للقائمة
-          </button>
-        }
-      />
+  return <>
+    <button type="button" className="back-link" onClick={() => navigate('/control/schedules')}>← العودة إلى الجداول</button>
+    <PageHeader
+      eyebrow="SCHEDULE DETAIL · READ ONLY"
+      title={`جدول المناوبات: ${shortId(data.id)}`}
+      description={`${formatDate(data.valid_from)} — ${formatDate(data.valid_to)} · ${data.timezone}`}
+      actions={<span className="read-only-label">قراءة فقط</span>}
+    />
 
-      <div className="card" style={{ background: 'var(--surface-color)', padding: '24px', borderRadius: '8px', marginTop: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h3 style={{ margin: 0, fontSize: '1.25rem' }}>المناوبات الأسبوعية وتوزيع المشرفين</h3>
-          <button className="button primary" disabled onClick={() => alert('إضافة مناوبة غير مدعوم في هذه الواجهة التجريبية')}>إضافة مناوبة</button>
-        </div>
+    <section className="profile-summary surface"><div><span>القسم</span><strong className="mono">{data.department_id}</strong></div><div><span>السنة الأكاديمية</span><strong className="mono">{data.academic_year_id}</strong></div><div><span>الفترة</span><strong>{formatDate(data.valid_from)} — {formatDate(data.valid_to)}</strong></div></section>
 
-        {Object.entries(groupedShifts).length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>لا توجد مناوبات في هذا الجدول</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            {Object.entries(groupedShifts).map(([day, dayShifts]) => (
-              <div key={day} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
-                <div style={{ background: 'var(--bg-color)', padding: '12px 16px', fontWeight: 'bold', borderBottom: '1px solid var(--border-color)' }}>
-                  {day}
-                </div>
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {dayShifts.map((shift) => (
-                    <div key={shift.id} style={{ display: 'flex', gap: '24px', paddingBottom: '16px', borderBottom: '1px dashed var(--border-color)' }}>
-                      <div style={{ minWidth: '150px' }}>
-                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                          {new Date(shift.starts_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })} - {new Date(shift.ends_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '4px' }}>
-                          الحالة: <span style={{ color: shift.status === 'ACTIVE' ? 'var(--success-fg, #137333)' : 'inherit' }}>{shift.status === 'ACTIVE' ? 'نشط' : 'ملغى'}</span>
-                        </div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ marginBottom: '8px', fontWeight: 'bold', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>المشرفون المعينون:</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {shift.members?.map((m) => (
-                            <div key={m.member_id} style={{ background: 'var(--neutral-bg, #f1f3f4)', padding: '4px 12px', borderRadius: '16px', fontSize: '0.875rem' }}>
-                              👤 {m.supervisor_name}
-                            </div>
-                          ))}
-                          {(!shift.members || shift.members.length === 0) && (
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>لا يوجد مشرفين (مناوبة شاغرة)</span>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <button className="button ghost small" disabled onClick={() => alert('تعديل المناوبة')}>تعديل</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    <section className="surface"><div className="surface-heading"><div><span className="eyebrow">DUTY SHIFTS</span><h2>المناوبات والمشرفون المرتبطون</h2></div><span className="directory-count">{data.shifts.length} مناوبة</span></div>{Object.entries(groupedShifts).length ? <div className="schedule-shift-list">{Object.entries(groupedShifts).map(([day, dayShifts]) => <section className="schedule-day" key={day}><h3>{day}</h3>{dayShifts.map((shift) => <article className="schedule-shift-card" key={shift.id}><div className="schedule-shift-time"><strong>{formatTime(shift.starts_at)} — {formatTime(shift.ends_at)}</strong><ShiftStatus value={shift.status} /></div><div><span className="eyebrow">SUPERVISORS</span><div className="schedule-members">{shift.members?.length ? shift.members.map((member) => <span className="schedule-member" key={member.member_id}>{member.supervisor_name ?? 'مشرف غير مسمى'}</span>) : <span className="muted">لا يوجد مشرفون مرتبطون بهذه المناوبة.</span>}</div></div></article>)}</section>)}</div> : <EmptyState title="لا توجد مناوبات" description="لا توجد شفتات مرتبطة بهذا الجدول في البيانات الحالية." />}</section>
+  </>;
 }

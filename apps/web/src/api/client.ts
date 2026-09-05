@@ -25,6 +25,11 @@ import type {
   SupervisorGrantListDto,
   SupervisorListDto,
   SupervisorSummaryDto,
+  SupervisorCapabilitiesDto,
+  SupervisorDailySheetDto,
+  SupervisorHistoryDayDto,
+  SupervisorReviewQueueDto,
+  SupervisorWorkSummaryDto,
   SubmissionStatus,
 } from '@dentpilot/contracts';
 
@@ -234,6 +239,11 @@ export const api = {
   supervisorActiveDuty: () => request<SupervisorDutyDto[]>('/api/v1/supervisor/duties/current'),
   supervisorUpcomingDuties: () => request<SupervisorDutyDto[]>('/api/v1/supervisor/duties/upcoming'),
   supervisorDutyCases: () => request<SupervisorDutyCaseDto[]>('/api/v1/supervisor/cases'),
+  supervisorDailySheet: () => request<SupervisorDailySheetDto>('/api/v1/supervisor/daily-sheet'),
+  supervisorReviewQueue: () => request<SupervisorReviewQueueDto>('/api/v1/supervisor/review-queue'),
+  supervisorHistoryDay: (date: string) => request<SupervisorHistoryDayDto>(`/api/v1/supervisor/history${queryString({ date })}`),
+  supervisorWorkSummary: (academicYearId: string, termId?: string) => request<SupervisorWorkSummaryDto>(`/api/v1/supervisor/work-summary${queryString({ academicYearId, termId })}`),
+  supervisorCapabilities: () => request<SupervisorCapabilitiesDto>('/api/v1/supervisor/capabilities'),
   supervisorCaseDetail: (id: string) => request<SupervisorCaseDetailDto>(`/api/v1/supervisor/cases/${encodeURIComponent(id)}`),
 
   submissions: (filters: SubmissionListQuery) =>

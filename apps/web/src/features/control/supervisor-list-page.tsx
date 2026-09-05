@@ -1,108 +1,48 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import { useResource } from '../../api/use-resource';
-import { ErrorState, LoadingState, PageHeader } from '../../components/ui';
+import { EmptyState, ErrorState, Field, LoadingState, PageHeader } from '../../components/ui';
 import { navigate } from '../../routing/hash-router';
 
 export function SupervisorListControlPage() {
   const { data, error, loading, reload } = useResource(() => api.controlSupervisors(), []);
-  const [inviting, setInviting] = useState(false);
-  const [email, setEmail] = useState('');
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
-  if (loading) return <LoadingState />;
+  const supervisors = data?.items ?? [];
+  const visibleSupervisors = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return supervisors.filter((supervisor) => {
+      const matchesQuery = !normalizedQuery
+        || supervisor.display_name.toLocaleLowerCase().includes(normalizedQuery)
+        || supervisor.email.toLocaleLowerCase().includes(normalizedQuery);
+      const matchesStatus = status === 'ALL' || (status === 'ACTIVE' ? supervisor.active : !supervisor.active);
+      return matchesQuery && matchesStatus;
+    });
+  }, [query, status, supervisors]);
+
+  if (loading) return <LoadingState label="جارٍ تحميل دليل المشرفين…" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
-  const supervisors = data?.items || [];
+  return <>
+    <PageHeader
+      eyebrow="SUPERVISORS · CONTROL"
+      title="دليل المشرفين"
+      description="دليل إداري للقراءة فقط ضمن نطاق الحساب المخول من الخادم."
+      actions={<span className="read-only-label">قراءة فقط</span>}
+    />
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setInviting(true);
-    try {
-      await api.controlIssueInvitation(email, 'CLINICAL_SUPERVISOR');
-      setEmail('');
-      reload();
-    } catch (err) {
-      console.error('Failed to invite supervisor', err);
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  return (
-    <div className="supervisor-list-page">
-      <PageHeader
-        eyebrow="الجامعة"
-        title="إدارة المشرفين السريريين"
-        description="إدارة حسابات المشرفين ودعواتهم للصلاحيات السريرية"
-      />
-
-      <div className="card form-card" style={{ marginBottom: '24px', padding: '16px', background: 'var(--surface-color)', borderRadius: '8px' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem' }}>دعوة مشرف جديد</h3>
-        <form onSubmit={handleInvite} style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="البريد الإلكتروني..."
-            className="input"
-            required
-            disabled={inviting}
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="button" disabled={inviting}>
-            {inviting ? 'جاري الإرسال...' : 'إرسال دعوة'}
-          </button>
-        </form>
+    <section className="surface filter-panel" aria-label="فلاتر دليل المشرفين">
+      <div className="filter-row">
+        <Field label="بحث"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="اسم المشرف أو البريد الإلكتروني" /></Field>
+        <Field label="حالة الحساب"><select value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="ALL">كل الحالات</option><option value="ACTIVE">نشط</option><option value="INACTIVE">غير نشط</option></select></Field>
       </div>
+      <small className="filter-help">البحث والحالة متاحان من البيانات الحالية. نطاق القسم والمنح يفرضهما الخادم وتظهر تفاصيلهما داخل الملف الإداري.</small>
+    </section>
 
-      <div className="card table-card" style={{ background: 'var(--surface-color)', borderRadius: '8px', overflow: 'hidden' }}>
-        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <th style={{ padding: '12px 16px' }}>الاسم</th>
-              <th style={{ padding: '12px 16px' }}>البريد الإلكتروني</th>
-              <th style={{ padding: '12px 16px' }}>الحالة</th>
-              <th style={{ padding: '12px 16px' }}>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {supervisors.map((sv) => (
-              <tr key={sv.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>{sv.display_name}</td>
-                <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{sv.email}</td>
-                <td style={{ padding: '12px 16px' }}>
-                  <span className={`badge ${sv.active ? 'success' : 'neutral'}`} style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.875rem',
-                    background: sv.active ? 'var(--success-bg, #e6f4ea)' : 'var(--neutral-bg, #f1f3f4)',
-                    color: sv.active ? 'var(--success-fg, #137333)' : 'var(--neutral-fg, #5f6368)'
-                  }}>
-                    {sv.active ? 'نشط' : 'غير نشط'}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <button
-                    type="button"
-                    className="button ghost small"
-                    onClick={() => navigate(`/control/supervisors/${sv.id}`)}
-                  >
-                    عرض التفاصيل
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {supervisors.length === 0 && (
-              <tr>
-                <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  لا يوجد مشرفين
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+    {!supervisors.length ? <EmptyState title="لا يوجد مشرفون" description="لم يعُد الخادم مشرفين ضمن نطاق الحساب الحالي." /> : !visibleSupervisors.length ? <EmptyState title="لا توجد نتائج مطابقة" description="غيّر عبارة البحث أو حالة الحساب لعرض نتائج أخرى." /> : <section className="surface">
+      <div className="surface-heading"><div><span className="eyebrow">READ-ONLY DIRECTORY</span><h2>المشرفون ضمن النطاق</h2></div><span className="directory-count">{visibleSupervisors.length} من {supervisors.length}</span></div>
+      <div className="table-wrap"><table><thead><tr><th>المشرف</th><th>البريد الإلكتروني</th><th>الحالة</th><th /></tr></thead><tbody>{visibleSupervisors.map((supervisor) => <tr key={supervisor.id}><td><b>{supervisor.display_name}</b><small className="block mono">{supervisor.id}</small></td><td>{supervisor.email}</td><td><span className={`status-badge status-${supervisor.active ? 'active' : 'inactive'}`}>{supervisor.active ? 'نشط' : 'غير نشط'}</span></td><td><button type="button" className="button ghost small" onClick={() => navigate(`/control/supervisors/${supervisor.id}`)}>فتح الملف الإداري</button></td></tr>)}</tbody></table></div>
+    </section>}
+  </>;
 }

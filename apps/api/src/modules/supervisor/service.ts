@@ -6,7 +6,7 @@ import { AuthorizationService } from '../../security/authorization.js';
 import { AuditService } from '../audit/service.js';
 import { IdempotencyService } from '../../infrastructure/idempotency.js';
 import { SupervisorAuthorizationEngine } from './authorization.js';
-import { ClinicalEvaluationPolicy, type SupervisorAction } from '@dentpilot/domain';
+import { ClinicalEvaluationPolicy } from '@dentpilot/domain';
 import type {
   DutyScheduleDetailDto,
   DutyScheduleDto,
@@ -19,8 +19,75 @@ import type {
   SupervisorGrantListDto,
   SupervisorListDto,
   SupervisorSummaryDto,
+  SupervisorAction,
+  SupervisorCapabilitiesDto,
+  SupervisorDailySheetDto,
+  SupervisorDailySheetItemDto,
+  SupervisorHistoryDayDto,
+  SupervisorHistoryDayItemDto,
+  SupervisorHistoryShiftDto,
+  SupervisorNextAction,
+  SupervisorReviewQueueDto,
+  SupervisorReviewQueueItemDto,
+  SupervisorWorkSummaryDto,
 } from '@dentpilot/contracts';
 import { CasesService } from '../cases/service.js';
+
+interface SupervisorCaseReadRow {
+  snapshot_id: string;
+  case_sheet_id: string;
+  student_id: string;
+  student_number: string;
+  student_display_name: string;
+  department_id: string;
+  department_name: string;
+  requirement_id: string | null;
+  subject_code: string | null;
+  subject_name: string | null;
+  shift_id: string;
+  shift_starts_at: Date;
+  shift_ends_at: Date;
+  shift_timezone: string;
+  case_status: SupervisorDailySheetItemDto['case_status'];
+  start_status: 'PENDING' | 'APPROVED';
+  completion_status: 'PENDING' | 'APPROVED';
+  evaluation_status: 'PENDING' | 'RECORDED';
+  evaluation_score: string | null;
+  feedback_exists: boolean;
+}
+
+function nextActionForRow(row: SupervisorCaseReadRow): SupervisorNextAction {
+  if (row.start_status === 'PENDING') return 'START_APPROVAL';
+  if (row.completion_status === 'PENDING') return 'COMPLETION_APPROVAL';
+  if (row.evaluation_status === 'PENDING') return 'EVALUATION';
+  if (!row.feedback_exists) return 'FEEDBACK';
+  return 'NONE';
+}
+
+function mapDailyItem(row: SupervisorCaseReadRow, allowedActions: SupervisorAction[]): SupervisorDailySheetItemDto {
+  return {
+    snapshot_id: row.snapshot_id,
+    case_sheet_id: row.case_sheet_id,
+    student_id: row.student_id,
+    student_number: row.student_number,
+    student_display_name: row.student_display_name,
+    department_id: row.department_id,
+    department_name: row.department_name,
+    requirement_id: row.requirement_id,
+    subject_code: row.subject_code,
+    subject_name: row.subject_name,
+    shift_id: row.shift_id,
+    shift_starts_at: row.shift_starts_at.toISOString(),
+    shift_ends_at: row.shift_ends_at.toISOString(),
+    case_status: row.case_status,
+    start_status: row.start_status,
+    completion_status: row.completion_status,
+    evaluation_status: row.evaluation_status,
+    evaluation_score: row.evaluation_score === null ? null : Number(row.evaluation_score),
+    next_action: nextActionForRow(row),
+    allowedActions,
+  };
+}
 
 export class SupervisorService {
   constructor(
@@ -332,6 +399,196 @@ export class SupervisorService {
       ...schedResult.rows[0],
       shifts: shiftsResult.rows
     };
+  }
+
+  // ==========================================
+  // SUPERVISOR READ MODELS
+  // ==========================================
+
+  private async readSupervisorCaseRows(client: PoolClient, principal: Principal, mode: 'current' | 'queue' | 'day', day?: string): Promise<Array<SupervisorCaseReadRow & { performed_actions?: string[]; status_at_day_end?: SupervisorDailySheetItemDto['case_status'] }>> {
+    if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
+    const params: unknown[] = [principal.organizationId, principal.accountId];
+    const filters: string[] = [
+      'ss.organization_id = $1',
+      'sa.supervisor_account_id = $2',
+      'cs.latest_snapshot_id = ss.id',
+      'ss.department_id = sa.department_id',
+      'ss.academic_year_id = sa.academic_year_id',
+      'ss.academic_level_id = sa.academic_level_id',
+      '(sa.cohort_id IS NULL OR ss.cohort_id = sa.cohort_id)',
+      '(sa.group_id IS NULL OR ss.group_id = sa.group_id)',
+    ];
+    if (mode === 'day') filters.push("sa.status <> 'REMOVED'");
+    else filters.push("sa.status = 'ACTIVE'");
+    if (mode === 'current') filters.push("sh.starts_at <= now() AND sh.ends_at >= now() AND sh.status = 'ACTIVE'");
+    if (mode === 'queue') filters.push("sh.starts_at <= now() AND cs.current_status <> 'GRADED'");
+    if (mode === 'day') {
+      if (!day) throw new ApiProblem(400, 'VALIDATION_ERROR', 'A history date is required.');
+      params.push(day);
+      filters.push("(sh.starts_at AT TIME ZONE sch.timezone)::date = $3::date");
+    }
+    const statusAtDayEnd = mode === 'day' ? `,
+      COALESCE((SELECT CASE ae.action
+        WHEN 'APPROVED_START' THEN 'APPROVED_START'
+        WHEN 'APPROVED_FINAL' THEN 'APPROVED_FINAL'
+        WHEN 'GRADE_RECORDED' THEN 'GRADED'
+        WHEN 'GRADE_AMENDED' THEN 'GRADED'
+        WHEN 'REVISION_REQUESTED' THEN 'REVISION_REQUESTED'
+        WHEN 'CASE_SUBMITTED' THEN 'SUBMITTED'
+        ELSE NULL END
+       FROM audit_events ae
+       WHERE ae.organization_id = ss.organization_id
+         AND ae.entity_type = 'submission_snapshot'
+         AND ae.entity_id = ss.id
+         AND ae.created_at < ($3::date + interval '1 day')
+       ORDER BY ae.created_at DESC, ae.id DESC LIMIT 1), 'SUBMITTED')::submission_status AS status_at_day_end,
+      COALESCE((SELECT array_agg(ae.action ORDER BY ae.created_at, ae.id)
+       FROM audit_events ae
+       WHERE ae.organization_id = ss.organization_id
+         AND ae.entity_type = 'submission_snapshot'
+         AND ae.entity_id = ss.id
+         AND ae.actor_account_id = $2
+         AND ae.created_at < ($3::date + interval '1 day')), ARRAY[]::text[]) AS performed_actions` : '';
+    const result = await client.query<SupervisorCaseReadRow & { performed_actions?: string[]; status_at_day_end?: SupervisorDailySheetItemDto['case_status'] }>(
+      `SELECT ss.id AS snapshot_id,
+              cs.id AS case_sheet_id,
+              ss.student_id,
+              st.student_number,
+              st.display_name AS student_display_name,
+              ss.department_id,
+              d.name AS department_name,
+              ss.requirement_id,
+              COALESCE(req.code, d.code) AS subject_code,
+              COALESCE(req.label, d.name) AS subject_name,
+              sh.id AS shift_id,
+              sh.starts_at AS shift_starts_at,
+              sh.ends_at AS shift_ends_at,
+              sch.timezone AS shift_timezone,
+              cs.current_status AS case_status,
+              CASE WHEN EXISTS (SELECT 1 FROM clinical_decisions cd WHERE cd.snapshot_id = ss.id AND cd.decision_type = 'APPROVE_START') THEN 'APPROVED' ELSE 'PENDING' END AS start_status,
+              CASE WHEN EXISTS (SELECT 1 FROM clinical_decisions cd WHERE cd.snapshot_id = ss.id AND cd.decision_type = 'APPROVE_FINAL') THEN 'APPROVED' ELSE 'PENDING' END AS completion_status,
+              CASE WHEN EXISTS (SELECT 1 FROM clinical_evaluation_events ce WHERE ce.snapshot_id = ss.id) THEN 'RECORDED' ELSE 'PENDING' END AS evaluation_status,
+              (SELECT ce.score::text FROM clinical_evaluation_events ce WHERE ce.snapshot_id = ss.id ORDER BY ce.created_at DESC, ce.id DESC LIMIT 1) AS evaluation_score,
+              EXISTS (SELECT 1 FROM supervisor_notes sn WHERE sn.snapshot_id = ss.id AND sn.author_account_id = $2) AS feedback_exists
+              ${statusAtDayEnd}
+       FROM clinical_case_duty_links cdl
+       JOIN case_sheets cs ON cs.id = cdl.case_sheet_id
+       JOIN submission_snapshots ss ON ss.id = cs.latest_snapshot_id
+       JOIN students st ON st.id = ss.student_id
+       JOIN departments d ON d.id = ss.department_id
+       LEFT JOIN requirements req ON req.id = ss.requirement_id
+       JOIN clinical_duty_shifts sh ON sh.id = cdl.shift_id AND sh.organization_id = ss.organization_id
+       JOIN clinical_duty_schedules sch ON sch.id = sh.schedule_id AND sch.organization_id = ss.organization_id
+       JOIN clinical_duty_members cdm ON cdm.shift_id = sh.id AND cdm.organization_id = ss.organization_id
+       JOIN supervisor_assignments sa ON sa.id = cdm.assignment_id
+       WHERE ${filters.join(' AND ')}
+       ORDER BY sh.starts_at DESC, st.display_name ASC, ss.id ASC`,
+      params,
+    );
+    return result.rows;
+  }
+
+  private async mapRowsToDailyItems(client: PoolClient, principal: Principal, rows: SupervisorCaseReadRow[]): Promise<SupervisorDailySheetItemDto[]> {
+    return Promise.all(rows.map(async (row) => mapDailyItem(row, await this.authEngine.getAllowedActionsForSnapshot(client, principal, row.snapshot_id))));
+  }
+
+  async getDailySheet(client: PoolClient, principal: Principal): Promise<SupervisorDailySheetDto> {
+    const duties = await this.getActiveDuty(client, principal);
+    const rows = await this.readSupervisorCaseRows(client, principal, 'current');
+    return { duty: duties[0] ?? null, items: await this.mapRowsToDailyItems(client, principal, rows), generated_at: new Date().toISOString() };
+  }
+
+  async getReviewQueue(client: PoolClient, principal: Principal): Promise<SupervisorReviewQueueDto> {
+    const rows = await this.readSupervisorCaseRows(client, principal, 'queue');
+    const items: SupervisorReviewQueueItemDto[] = [];
+    for (const row of rows) {
+      const allowedActions = await this.authEngine.getAllowedActionsForSnapshot(client, principal, row.snapshot_id);
+      const item = mapDailyItem(row, allowedActions);
+      if (item.next_action === 'NONE') continue;
+      const actionRequired: SupervisorNextAction = item.next_action;
+      const actionMap: Partial<Record<SupervisorNextAction, SupervisorAction>> = {
+        START_APPROVAL: 'START_APPROVAL',
+        COMPLETION_APPROVAL: 'COMPLETION_APPROVAL',
+        EVALUATION: 'CASESHEET_EVALUATION',
+        FEEDBACK: 'CLINICAL_FEEDBACK',
+      };
+      const requiredAction = actionMap[actionRequired];
+      items.push({
+        ...item,
+        action_required: actionRequired,
+        original_duty_date: new Intl.DateTimeFormat('en-CA', { timeZone: row.shift_timezone }).format(row.shift_starts_at),
+        is_action_allowed_now: requiredAction ? allowedActions.includes(requiredAction) : false,
+      });
+    }
+    return { items, generated_at: new Date().toISOString() };
+  }
+
+  async getHistoryDay(client: PoolClient, principal: Principal, day: string): Promise<SupervisorHistoryDayDto> {
+    const rows = await this.readSupervisorCaseRows(client, principal, 'day', day);
+    const items: SupervisorHistoryDayItemDto[] = [];
+    const shifts = new Map<string, SupervisorHistoryShiftDto>();
+    for (const row of rows) {
+      shifts.set(row.shift_id, { shift_id: row.shift_id, starts_at: row.shift_starts_at.toISOString(), ends_at: row.shift_ends_at.toISOString(), status: 'CLOSED' });
+      const daily = mapDailyItem(row, []);
+      items.push({
+        ...daily,
+        status_at_day_end: row.status_at_day_end ?? daily.case_status,
+        performed_actions: row.performed_actions ?? [],
+        remained_pending: daily.next_action !== 'NONE',
+      });
+    }
+    return { date: day, shifts: [...shifts.values()], items, generated_at: new Date().toISOString() };
+  }
+
+  async getWorkSummary(client: PoolClient, principal: Principal, academicYearId: string, termId?: string): Promise<SupervisorWorkSummaryDto> {
+    if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
+    const contextParams = [principal.organizationId, principal.accountId, academicYearId, termId ?? null];
+    const [days, startApprovals, completionApprovals, evaluations, feedback, deferred] = await Promise.all([
+      client.query<{ count: string }>(`SELECT COUNT(DISTINCT (sh.starts_at AT TIME ZONE sch.timezone)::date)::text AS count
+        FROM clinical_duty_members cdm JOIN clinical_duty_shifts sh ON sh.id=cdm.shift_id JOIN clinical_duty_schedules sch ON sch.id=sh.schedule_id
+        JOIN supervisor_assignments sa ON sa.id=cdm.assignment_id
+        WHERE cdm.organization_id=$1 AND sa.supervisor_account_id=$2 AND sch.academic_year_id=$3 AND ($4::uuid IS NULL OR sch.term_id=$4)`, contextParams),
+      client.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM audit_events ae JOIN submission_snapshots ss ON ss.id=ae.entity_id
+        WHERE ae.organization_id=$1 AND ae.actor_account_id=$2 AND ae.entity_type='submission_snapshot' AND ae.action='APPROVED_START'
+          AND ss.academic_year_id=$3 AND ($4::uuid IS NULL OR ss.term_id=$4)`, contextParams),
+      client.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM audit_events ae JOIN submission_snapshots ss ON ss.id=ae.entity_id
+        WHERE ae.organization_id=$1 AND ae.actor_account_id=$2 AND ae.entity_type='submission_snapshot' AND ae.action='APPROVED_FINAL'
+          AND ss.academic_year_id=$3 AND ($4::uuid IS NULL OR ss.term_id=$4)`, contextParams),
+      client.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clinical_evaluation_events ce JOIN submission_snapshots ss ON ss.id=ce.snapshot_id
+        WHERE ce.organization_id=$1 AND ce.evaluator_account_id=$2 AND ss.academic_year_id=$3 AND ($4::uuid IS NULL OR ss.term_id=$4)`, contextParams),
+      client.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM supervisor_notes sn JOIN submission_snapshots ss ON ss.id=sn.snapshot_id
+        WHERE sn.organization_id=$1 AND sn.author_account_id=$2 AND ss.academic_year_id=$3 AND ($4::uuid IS NULL OR ss.term_id=$4)`, contextParams),
+      this.getReviewQueue(client, principal),
+    ]);
+    return {
+      academic_year_id: academicYearId,
+      term_id: termId ?? null,
+      supervision_days: Number(days.rows[0]?.count ?? 0),
+      start_approvals: Number(startApprovals.rows[0]?.count ?? 0),
+      completion_approvals: Number(completionApprovals.rows[0]?.count ?? 0),
+      evaluations: Number(evaluations.rows[0]?.count ?? 0),
+      feedback_notes: Number(feedback.rows[0]?.count ?? 0),
+      deferred_work: deferred.items.filter((item) => !item.is_action_allowed_now).length,
+      generated_at: new Date().toISOString(),
+    };
+  }
+
+  async getCapabilities(client: PoolClient, principal: Principal): Promise<SupervisorCapabilitiesDto> {
+    if (principal.role !== 'CLINICAL_SUPERVISOR') throw new ApiProblem(403, 'FORBIDDEN', 'Access denied.');
+    const capabilities = new Set<SupervisorCapabilitiesDto['capabilities'][number]>(['DAILY_SHEET_READ', 'REVIEW_QUEUE_READ', 'HISTORY_READ', 'WORK_SUMMARY_READ']);
+    const result = await client.query<{ permission: SupervisorAction }>(
+      `SELECT DISTINCT spi.permission
+       FROM clinical_duty_members cdm
+       JOIN clinical_duty_shifts sh ON sh.id=cdm.shift_id
+       JOIN supervisor_assignments sa ON sa.id=cdm.assignment_id
+       JOIN supervisor_permission_grants spg ON spg.assignment_id=sa.id AND spg.organization_id=sa.organization_id
+       JOIN supervisor_permission_set_items spi ON spi.version_id=spg.permission_set_version_id AND spi.organization_id=spg.organization_id
+       WHERE cdm.organization_id=$1 AND sa.supervisor_account_id=$2 AND sh.starts_at<=now() AND sh.ends_at>=now() AND sh.status='ACTIVE'
+         AND sa.status='ACTIVE' AND spg.effective_from<=now() AND (spg.effective_to IS NULL OR spg.effective_to>now())`,
+      [principal.organizationId, principal.accountId],
+    );
+    for (const row of result.rows) capabilities.add(row.permission);
+    return { capabilities: [...capabilities], generated_at: new Date().toISOString() };
   }
 
   // ==========================================

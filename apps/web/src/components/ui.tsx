@@ -9,11 +9,11 @@ export function PageHeader({ eyebrow, title, description, actions }: { eyebrow: 
 }
 
 export function LoadingState({ label = 'جارٍ تحميل البيانات من الخادم…' }: { label?: string }) {
-  return <div className="state-card loading-state" role="status" aria-live="polite"><span className="spinner" aria-hidden="true" /> <b>{label}</b></div>;
+  return <div className="state-card loading-state" role="status" aria-live="polite" aria-busy="true"><span className="state-icon" aria-hidden="true"><span className="spinner" /></span><div><b>{label}</b><small className="state-supporting-text">يرجى الانتظار لحظات</small></div></div>;
 }
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
-  return <div className="state-card empty-state"><span className="state-icon">◇</span><h2>{title}</h2><p>{description}</p></div>;
+  return <div className="state-card empty-state" role="status"><span className="state-icon" aria-hidden="true">◇</span><h2>{title}</h2><p>{description}</p></div>;
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
@@ -50,7 +50,7 @@ export function Pager({ page, totalPages, total, onPage }: { page: number; total
 }
 
 export function MetricCard({ label, value, hint, tone = 'teal' }: { label: string; value: number | string; hint: string; tone?: 'teal' | 'blue' | 'gold' | 'violet' }) {
-  return <article className={`metric-card metric-${tone}`}><span>{label}</span><strong>{value}</strong><small>{hint}</small></article>;
+  return <article className={`metric-card metric-${tone}`}><span className="metric-label">{label}</span><strong>{value}</strong><small>{hint}</small></article>;
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -58,5 +58,5 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export function DataTable({ children }: { children: ReactNode }) {
-  return <div className="table-wrap"><table>{children}</table></div>;
+  return <div className="table-wrap"><table className="data-table">{children}</table></div>;
 }
